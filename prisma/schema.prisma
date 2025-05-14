@@ -1,0 +1,49 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Bot {
+  id              String    @id @default(cuid())
+  name            String
+  walletAddress   String
+  riskPercentage  Int
+  strategyType    String
+  isActive        Boolean   @default(false)
+  totalTrades     Int       @default(0)
+  successfulTrades Int      @default(0)
+  totalProfit     Float     @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  trades          Trade[]
+  positions       Position[]
+}
+
+model Trade {
+  id          String    @id @default(cuid())
+  botId       String
+  type        String    // 'buy' oder 'sell'
+  amount      Float
+  price       Float
+  profit      Float?
+  timestamp   DateTime  @default(now())
+  txSignature String    @unique
+  bot         Bot       @relation(fields: [botId], references: [id])
+}
+
+model Position {
+  id            String    @id @default(cuid())
+  botId         String
+  entryPrice    Float
+  amount        Float
+  currentPrice  Float
+  profit        Float
+  isOpen        Boolean   @default(true)
+  openedAt      DateTime  @default(now())
+  closedAt      DateTime?
+  bot           Bot       @relation(fields: [botId], references: [id])
+} 
