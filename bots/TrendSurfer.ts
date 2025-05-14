@@ -19,8 +19,8 @@ interface TradeResult {
   price: number;
   size: number;
   timestamp: number;
-  type: 'entry' | 'exit' | 'partial_exit';
   profit: number;
+  type?: 'buy' | 'sell' | 'auto' | 'entry' | 'exit' | 'partial_exit';
 }
 
 interface TokenInfo {
@@ -387,7 +387,7 @@ export class MomentumBot {
       price: entryPrice,
       size: sizeInTokens,
       timestamp: Date.now(),
-      type: 'entry',
+      type: 'buy',
       profit: estimatedProfit
     };
   }

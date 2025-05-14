@@ -20,6 +20,7 @@ interface TradeResult {
   size: number;
   timestamp: number;
   profit: number;
+  type?: 'buy' | 'sell' | 'auto';
 }
 
 interface TokenInfo {
