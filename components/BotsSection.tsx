@@ -9,6 +9,21 @@ const BotsSection: FC = () => {
   const [volumeTrackerRisk, setVolumeTrackerRisk] = useState(15);
   const [momentumBotRisk, setMomentumBotRisk] = useState(15);
   const [dipHunterRisk, setDipHunterRisk] = useState(15);
+  
+  // Bot status states
+  const [botStatuses, setBotStatuses] = useState({
+    'vol-tracker': 'paused' as 'active' | 'paused',
+    'trend-surfer': 'paused' as 'active' | 'paused',
+    'arb-finder': 'paused' as 'active' | 'paused'
+  });
+
+  // Handle bot status change
+  const handleStatusChange = (id: string, status: 'active' | 'paused') => {
+    setBotStatuses(prev => ({
+      ...prev,
+      [id]: status
+    }));
+  };
 
   const bots = [
     {
@@ -24,6 +39,10 @@ const BotsSection: FC = () => {
       riskColor: 'text-yellow-400',
       baseRiskPerTrade: volumeTrackerRisk, // Dynamic risk percentage
       riskManagement: 'The bot implements automatic stop-loss mechanisms for each trade with 35% loss limitation. Risk per trade can be adjusted from 1-50% of your capital.',
+      status: botStatuses['vol-tracker'],
+      profitToday: 2.5,
+      profitWeek: 25.0,
+      profitMonth: 71.6
     },
     {
       id: 'trend-surfer',
@@ -38,6 +57,10 @@ const BotsSection: FC = () => {
       riskColor: 'text-red-400',
       baseRiskPerTrade: momentumBotRisk, // Dynamic risk percentage
       riskManagement: 'Due to the more aggressive strategy, this bot has a higher base volatility with a stop-loss at 35%. Risk per trade can be adjusted from 1-50% of your capital.',
+      status: botStatuses['trend-surfer'],
+      profitToday: 3.8,
+      profitWeek: 38.4,
+      profitMonth: 109.4
     },
     {
       id: 'arb-finder',
@@ -52,6 +75,10 @@ const BotsSection: FC = () => {
       riskColor: 'text-green-400',
       baseRiskPerTrade: dipHunterRisk, // Dynamic risk percentage
       riskManagement: 'Lowest base volatility with a stop-loss of 25%. Maximum holding time of 60 minutes for reduced risk. Risk per trade can be adjusted from 1-50% of your capital.',
+      status: botStatuses['arb-finder'],
+      profitToday: 2.3,
+      profitWeek: 23.4,
+      profitMonth: 67.2
     },
   ];
 
@@ -83,6 +110,7 @@ const BotsSection: FC = () => {
                 }
               }}
               riskManagement={`Current risk per trade: ${bot.baseRiskPerTrade}% of your capital (Adjustable via risk slider)`}
+              onStatusChange={handleStatusChange}
             />
           ))}
         </div>

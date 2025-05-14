@@ -20,11 +20,11 @@ interface BotCardProps {
   riskManagement?: string;
   baseRiskPerTrade: number;
   onRiskChange?: (value: number) => void;
-  status: 'active' | 'paused';
-  profitToday: number;
-  profitWeek: number;
-  profitMonth: number;
-  onStatusChange: (id: string, status: 'active' | 'paused') => void;
+  status?: 'active' | 'paused';
+  profitToday?: number;
+  profitWeek?: number;
+  profitMonth?: number;
+  onStatusChange?: (id: string, status: 'active' | 'paused') => void;
 }
 
 const BotCard: FC<BotCardProps> = ({
@@ -41,11 +41,11 @@ const BotCard: FC<BotCardProps> = ({
   riskManagement,
   baseRiskPerTrade,
   onRiskChange,
-  status,
-  profitToday,
-  profitWeek,
-  profitMonth,
-  onStatusChange
+  status = 'paused',
+  profitToday = 0,
+  profitWeek = 0,
+  profitMonth = 0,
+  onStatusChange = () => {}
 }) => {
   const { connected, publicKey, signTransaction } = useWallet();
   const [performanceTimeframe, setPerformanceTimeframe] = useState<'7d' | '30d'>('7d');
