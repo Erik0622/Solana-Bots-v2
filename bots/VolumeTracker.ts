@@ -1,7 +1,8 @@
 import { Connection, PublicKey, Transaction } from '@solana/web3.js';
 import { Market } from '@project-serum/serum';
 import { AnchorProvider } from '@project-serum/anchor';
-import { buyToken, sellToken, getTradingPairByMarketName } from '@/lib/jupiter';
+import { buyToken, sellToken, getTradingPairByMarketName, buyTokenWithSOL, sellTokenForSOL, SOL_MINT } from '@/lib/jupiter';
+import { TokenDiscoveryService, NewToken } from '@/lib/token/discovery';
 
 // Custom interfaces
 interface Fill {
@@ -39,10 +40,10 @@ export class VolumeTracker {
   private marketAddress: PublicKey;
   private market: Market | null = null;
   private riskPercentage: number;
-  private minimumMarketCap: number = 40000; // 40k minimum market cap
+  private minimumMarketCap: number = 100000; // Erhöht auf 100k minimum market cap
   private timeWindowMin: number = 5; // 5-minute window for volume analysis
   private launchExclusionMin: number = 30; // Avoid first 30 minutes after launch
-  private maxTokenAgeHours: number = 24; // Only trade tokens under 24h old
+  private maxTokenAgeHours: number = 24; // Nur Token unter 24h handeln
   private volumeThresholdPercentage: number = 25; // Volume should be 25% of market cap
   private volumeThresholdLargeCapPercentage: number = 15; // 15% for larger market caps
   private largeMarketCapThreshold: number = 500000; // 500k threshold for large market cap
@@ -52,24 +53,41 @@ export class VolumeTracker {
   private partialTakeProfitAmount: number = 50; // Take 50% of the position at partial TP
   private position: { entry: number; size: number; stopLoss: number; takeProfit: number; partialTaken: boolean; tokenMint: PublicKey } | null = null;
   private usdcBalance: number = 0;
+  private solBalance: number = 0;
   private tradingPair: { baseMint: PublicKey, quoteMint: PublicKey };
   private marketName: string;
+  private useNewTokensOnly: boolean = false; // Flag für Trading mit neuen Tokens
+  private tokenDiscovery: TokenDiscoveryService;
+  private requireLockedLiquidity: boolean = true; // Standardmäßig gelockte Liquidität erfordern
 
   constructor(
     provider: AnchorProvider,
     marketAddress: string,
-    riskPercentage: number = 15 // Default 15% risk per trade
+    riskPercentage: number = 15, // Default 15% risk per trade
+    useNewTokensOnly: boolean = false // Default: Standard-Verhalten 
   ) {
     this.provider = provider;
     this.connection = provider.connection;
     this.marketAddress = new PublicKey(marketAddress);
     this.riskPercentage = riskPercentage;
+    this.useNewTokensOnly = useNewTokensOnly;
     
     // Bestimme das Trading-Paar anhand der Marktadresse
     this.marketName = this.getMarketNameFromAddress(marketAddress);
     this.tradingPair = getTradingPairByMarketName(this.marketName);
     
+    // Initialisiere TokenDiscovery für neue Token-Filterung
+    this.tokenDiscovery = new TokenDiscoveryService(this.connection, {
+      maxAgeHours: this.maxTokenAgeHours,
+      minMarketCap: this.minimumMarketCap,
+      requireLockedLiquidity: this.requireLockedLiquidity,
+      minVolume: 5000
+    });
+    
     console.log(`VolumeTracker initialisiert für Markt: ${this.marketName}`);
+    if (this.useNewTokensOnly) {
+      console.log("Modus: Nur neue Token unter 24 Stunden");
+    }
   }
   
   // Hilfsmethode um den Marktnamen aus der Adresse zu bestimmen
@@ -94,30 +112,29 @@ export class VolumeTracker {
         this.provider.publicKey
       );
       
-      // Prüfe den USDC-Balance des Benutzers
-      await this.updateUSDCBalance();
+      // Prüfe den USDC- und SOL-Balance des Benutzers
+      await this.updateBalances();
       
-      console.log(`Bot initialisiert. USDC-Balance: ${this.usdcBalance}`);
+      console.log(`Bot initialisiert. USDC-Balance: ${this.usdcBalance}, SOL-Balance: ${this.solBalance}`);
     } catch (error) {
       console.error('Fehler bei der Initialisierung des Bots:', error);
       throw error;
     }
   }
   
-  // Aktualisiert den USDC-Balance des Benutzers
-  private async updateUSDCBalance(): Promise<void> {
+  // Aktualisiert den USDC- und SOL-Balance des Benutzers
+  private async updateBalances(): Promise<void> {
     try {
-      // Hier würden wir normalerweise das Token-Konto abfragen
-      // Vereinfachtes Beispiel: Verwende 10% des SOL-Balances als USDC-Equivalent
+      // SOL-Balance abrufen
       const lamports = await this.connection.getBalance(this.provider.publicKey);
-      const solBalance = lamports / 1_000_000_000; // Konvertiere Lamports zu SOL
+      this.solBalance = lamports / 1_000_000_000; // Konvertiere Lamports zu SOL
       
-      // Annahme: 1 SOL = ca. 100 USDC (zur Vereinfachung)
-      this.usdcBalance = solBalance * 100 * 0.1; // 10% des SOL-Werts in USDC
+      // USDC-Balance (vereinfacht für das Beispiel, in Produktion Token-Konto abfragen)
+      this.usdcBalance = this.solBalance * 100 * 0.1; // Annahme: 1 SOL = ca. 100 USDC, 10% als USDC
       
-      console.log(`USDC-Balance aktualisiert: ${this.usdcBalance.toFixed(2)} USDC`);
+      console.log(`Balances aktualisiert: ${this.usdcBalance.toFixed(2)} USDC, ${this.solBalance.toFixed(2)} SOL`);
     } catch (error) {
-      console.error('Fehler beim Aktualisieren des USDC-Balances:', error);
+      console.error('Fehler beim Aktualisieren der Balances:', error);
     }
   }
 
@@ -195,6 +212,41 @@ export class VolumeTracker {
 
   // Check if a token meets our trading criteria
   private async checkTradingCriteria(): Promise<boolean> {
+    // Wenn wir im Modus "nur neue Token" sind, erfordern wir eine zusätzliche Sicherheitsprüfung
+    if (this.useNewTokensOnly) {
+      try {
+        // Prüfe die Token-Sicherheit mit dem TokenDiscovery-Service
+        const tokenMint = this.tradingPair.baseMint.toString();
+        const tokenInfo = await this.tokenDiscovery.getTokenInfo(tokenMint);
+        
+        // Wenn es keine Token-Informationen gibt oder das Token nicht sicher ist, überspringe
+        if (!tokenInfo || !tokenInfo.liquidityLocked || tokenInfo.isHoneypot) {
+          console.log('Token erfüllt nicht die Sicherheitsanforderungen (Liquidity nicht gelockt oder Honeypot)');
+          return false;
+        }
+        
+        // Prüfe das Alter des Tokens
+        const now = Date.now();
+        const tokenAgeHours = (now - tokenInfo.launchTime) / (60 * 60 * 1000);
+        if (tokenAgeHours > this.maxTokenAgeHours) {
+          console.log('Token ist zu alt:', tokenAgeHours.toFixed(2), 'Stunden');
+          return false;
+        }
+        
+        // Prüfe die Marktkapitalisierung
+        if (tokenInfo.marketCap < this.minimumMarketCap) {
+          console.log('Marktkapitalisierung zu niedrig:', tokenInfo.marketCap);
+          return false;
+        }
+        
+        console.log('Token erfüllt die Sicherheits- und Altersanforderungen');
+      } catch (error) {
+        console.error('Fehler bei der Token-Überprüfung:', error);
+        return false;
+      }
+    }
+    
+    // Standard-Trading-Kriterien
     const tokenInfo = await this.getTokenInfo();
     const now = Date.now();
     
@@ -237,13 +289,22 @@ export class VolumeTracker {
   async checkVolumeAndTrade(): Promise<TradeResult | null> {
     if (!this.market) throw new Error('Market not initialized');
 
-    // Aktualisiere USDC-Balance
-    await this.updateUSDCBalance();
+    // Aktualisiere Balances
+    await this.updateBalances();
     
-    // Prüfe, ob genug USDC für einen Trade vorhanden ist
-    if (this.usdcBalance < 10) {
-      console.log('Nicht genug USDC für einen Trade. Mindestens 10 USDC erforderlich.');
-      return null;
+    // Prüfe, ob genug Kapital für einen Trade vorhanden ist
+    if (this.useNewTokensOnly) {
+      // Im neuen Token-Modus verwenden wir SOL
+      if (this.solBalance < 0.05) {
+        console.log('Nicht genug SOL für einen Trade. Mindestens 0.05 SOL erforderlich.');
+        return null;
+      }
+    } else {
+      // Im Standard-Modus verwenden wir USDC
+      if (this.usdcBalance < 10) {
+        console.log('Nicht genug USDC für einen Trade. Mindestens 10 USDC erforderlich.');
+        return null;
+      }
     }
 
     // Get current price
@@ -303,18 +364,39 @@ export class VolumeTracker {
     if (!this.market) throw new Error('Market not initialized');
 
     try {
-      // Berechne USDC-Betrag basierend auf Risikoprozentsatz
-      const tradeAmountUSDC = this.usdcBalance * (this.riskPercentage / 100);
+      let tradeResult;
       
-      // Kaufe das Basis-Token (z.B. SOL) mit USDC über Jupiter
-      console.log(`Kaufe ${this.marketName} für ${tradeAmountUSDC} USDC...`);
-      
-      const tradeResult = await buyToken(
-        this.connection,
-        this.provider.wallet, // Muss signTransaction unterstützen
-        this.tradingPair.baseMint,
-        tradeAmountUSDC
-      );
+      if (this.useNewTokensOnly) {
+        // Verwende SOL als Handelswährung für neue Tokens
+        const tradeAmountSOL = this.solBalance * (this.riskPercentage / 100);
+        
+        console.log(`Kaufe ${this.marketName} für ${tradeAmountSOL.toFixed(4)} SOL...`);
+        
+        tradeResult = await buyTokenWithSOL(
+          this.connection,
+          this.provider.wallet,
+          this.tradingPair.baseMint,
+          tradeAmountSOL
+        );
+        
+        // Aktualisiere SOL-Balance
+        this.solBalance -= tradeAmountSOL;
+      } else {
+        // Standard-Fall: Verwende USDC für etablierte Märkte
+        const tradeAmountUSDC = this.usdcBalance * (this.riskPercentage / 100);
+        
+        console.log(`Kaufe ${this.marketName} für ${tradeAmountUSDC} USDC...`);
+        
+        tradeResult = await buyToken(
+          this.connection,
+          this.provider.wallet,
+          this.tradingPair.baseMint,
+          tradeAmountUSDC
+        );
+        
+        // Aktualisiere USDC-Balance
+        this.usdcBalance -= tradeAmountUSDC;
+      }
       
       if (!tradeResult) {
         throw new Error(`Kauf von ${this.marketName} fehlgeschlagen`);
@@ -336,9 +418,6 @@ export class VolumeTracker {
       
       console.log(`Trade erfolgreich ausgeführt: Einstieg bei ${entryPrice}, Stop Loss bei ${stopLossPrice}, Take Profit bei ${takeProfitPrice}`);
       console.log(`Transaktion: ${tradeResult.signature}`);
-      
-      // Aktualisiere USDC-Balance
-      this.usdcBalance -= tradeAmountUSDC;
       
       return {
         signature: tradeResult.signature,
@@ -362,15 +441,39 @@ export class VolumeTracker {
     if (!this.position) throw new Error('No position to exit');
     
     try {
-      // Verkaufe das Token gegen USDC über Jupiter
-      console.log(`Verkaufe ${size} ${this.marketName} für USDC...`);
+      let tradeResult;
       
-      const tradeResult = await sellToken(
-        this.connection,
-        this.provider.wallet,
-        this.tradingPair.baseMint,
-        size
-      );
+      if (this.useNewTokensOnly) {
+        // Verwende SOL als Zielbasis beim Verkauf neuer Tokens
+        console.log(`Verkaufe ${size} ${this.marketName} für SOL...`);
+        
+        tradeResult = await sellTokenForSOL(
+          this.connection,
+          this.provider.wallet,
+          this.position.tokenMint,
+          size
+        );
+        
+        // Aktualisiere SOL-Balance wenn erfolgreich
+        if (tradeResult) {
+          this.solBalance += tradeResult.amountOut;
+        }
+      } else {
+        // Standard: Verkaufe gegen USDC
+        console.log(`Verkaufe ${size} ${this.marketName} für USDC...`);
+        
+        tradeResult = await sellToken(
+          this.connection,
+          this.provider.wallet,
+          this.position.tokenMint,
+          size
+        );
+        
+        // Aktualisiere USDC-Balance wenn erfolgreich
+        if (tradeResult) {
+          this.usdcBalance += tradeResult.amountOut;
+        }
+      }
       
       if (!tradeResult) {
         throw new Error(`Verkauf von ${this.marketName} fehlgeschlagen`);
@@ -383,9 +486,6 @@ export class VolumeTracker {
       
       console.log(`Exit ausgeführt: ${reason} bei ${exitPrice}, P/L: ${profitLoss.toFixed(2)} USDC`);
       console.log(`Transaktion: ${tradeResult.signature}`);
-      
-      // Aktualisiere USDC-Balance
-      this.usdcBalance += tradeResult.amountOut;
       
       // Wenn dies ein vollständiger Exit war (kein partieller), lösche die Position
       if (reason !== 'partial_take_profit' || this.position.size <= 0) {
@@ -410,6 +510,28 @@ export class VolumeTracker {
 
   setRiskPercentage(newRiskPercentage: number): void {
     this.riskPercentage = newRiskPercentage;
+  }
+  
+  // Neue Konfigurationsfunktion für Token-Filter
+  setTokenFilterConfig(config: {
+    maxAgeHours?: number;
+    minMarketCap?: number;
+    requireLockedLiquidity?: boolean;
+    useNewTokensOnly?: boolean;
+  }): void {
+    if (config.maxAgeHours !== undefined) this.maxTokenAgeHours = config.maxAgeHours;
+    if (config.minMarketCap !== undefined) this.minimumMarketCap = config.minMarketCap;
+    if (config.requireLockedLiquidity !== undefined) this.requireLockedLiquidity = config.requireLockedLiquidity;
+    if (config.useNewTokensOnly !== undefined) this.useNewTokensOnly = config.useNewTokensOnly;
+    
+    // Aktualisiere auch den TokenDiscovery-Service
+    this.tokenDiscovery.updateConfig({
+      maxAgeHours: this.maxTokenAgeHours,
+      minMarketCap: this.minimumMarketCap,
+      requireLockedLiquidity: this.requireLockedLiquidity
+    });
+    
+    console.log(`Token-Filter konfiguriert: Max. Alter ${this.maxTokenAgeHours}h, Min. MarketCap ${this.minimumMarketCap}, Liquidity-Lock: ${this.requireLockedLiquidity ? 'Erforderlich' : 'Optional'}`);
   }
 
   // For creating historical performance data (in percentage)

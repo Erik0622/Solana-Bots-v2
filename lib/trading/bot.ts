@@ -5,7 +5,6 @@ import { AnchorProvider } from '@project-serum/anchor';
 import { VolumeTracker } from '@/bots/VolumeTracker';
 import { MomentumBot } from '@/bots/TrendSurfer';
 import { DipHunter } from '@/bots/ArbitrageFinder';
-import { NewTokenHunter } from '@/bots/NewTokenHunter';
 import prisma, { getMockModeStatus } from '@/lib/prisma';
 
 // Alchemy RPC URL für Solana Mainnet
@@ -31,22 +30,48 @@ const walletProviders = new Map();
 export enum BotType {
   VOLUME_TRACKER = 'volume-tracker',
   TREND_SURFER = 'trend-surfer',
-  DIP_HUNTER = 'dip-hunter',
-  NEW_TOKEN_HUNTER = 'new-token-hunter'
+  DIP_HUNTER = 'dip-hunter'
 }
 
-// Initialisiere einen Bot mit der richtigen Strategie
-function createBot(botType: string, provider: AnchorProvider, marketAddress: string, riskPercentage: number) {
-  console.log(`Erstelle Bot vom Typ ${botType} mit Risiko ${riskPercentage}%`);
+// Interface für Bot-Konfiguration
+export interface BotConfig {
+  useNewTokensOnly?: boolean;
+  maxTokenAgeHours?: number;
+  minMarketCap?: number;
+  requireLockedLiquidity?: boolean;
+  riskPercentage?: number;
+}
+
+// Initialisiere einen Bot mit der richtigen Strategie und Konfiguration
+function createBot(botType: string, provider: AnchorProvider, marketAddress: string, config: BotConfig) {
+  const { riskPercentage = 15, useNewTokensOnly = false } = config;
+  
+  console.log(`Erstelle Bot vom Typ ${botType} mit Risiko ${riskPercentage}% ${useNewTokensOnly ? '(Nur neue Token)' : ''}`);
+  
   switch (botType) {
     case BotType.VOLUME_TRACKER:
-      return new VolumeTracker(provider, marketAddress, riskPercentage);
+      const volumeTracker = new VolumeTracker(provider, marketAddress, riskPercentage, useNewTokensOnly);
+      // Konfiguriere die Token-Filter wenn notwendig
+      if (config.maxTokenAgeHours || config.minMarketCap || config.requireLockedLiquidity !== undefined) {
+        volumeTracker.setTokenFilterConfig({
+          maxAgeHours: config.maxTokenAgeHours,
+          minMarketCap: config.minMarketCap,
+          requireLockedLiquidity: config.requireLockedLiquidity,
+          useNewTokensOnly
+        });
+      }
+      return volumeTracker;
+      
     case BotType.TREND_SURFER:
-      return new MomentumBot(provider, marketAddress, riskPercentage);
+      const trendSurfer = new MomentumBot(provider, marketAddress, riskPercentage);
+      // Implementiere Token-Filter für TrendSurfer wenn entsprechende Methoden vorhanden sind
+      return trendSurfer;
+      
     case BotType.DIP_HUNTER:
-      return new DipHunter(provider, marketAddress, riskPercentage);
-    case BotType.NEW_TOKEN_HUNTER:
-      return new NewTokenHunter(provider, riskPercentage);
+      const dipHunter = new DipHunter(provider, marketAddress, riskPercentage);
+      // Implementiere Token-Filter für DipHunter wenn entsprechende Methoden vorhanden sind
+      return dipHunter;
+      
     default:
       throw new Error(`Unbekannter Bot-Typ: ${botType}`);
   }
@@ -58,7 +83,7 @@ export function registerWalletForBot(botId: string, wallet: any) {
   console.log(`Wallet für Bot ${botId} registriert`);
 }
 
-export async function startTradingBot(botId: string) {
+export async function startTradingBot(botId: string, config: BotConfig = {}) {
   try {
     // Hole Bot-Daten aus der Datenbank
     let bot;
@@ -109,19 +134,21 @@ export async function startTradingBot(botId: string) {
       case BotType.DIP_HUNTER:
         marketAddress = 'A8YFbxQYFVqKZaoYJLLUVcQiWP7G2MeEgW5wsAQgMvFw'; // BTC/USDC
         break;
-      case BotType.NEW_TOKEN_HUNTER:
-        marketAddress = ''; // Kein spezifischer Markt nötig
-        break;
       default:
         marketAddress = '9wFFyRfZBsuAha4YcuxcXLKwMxJR43S7fPfQLusDBzvT'; // Standard: SOL/USDC
     }
 
-    // Erstelle und initialisiere den Bot
+    // Erstelle und initialisiere den Bot mit der übergebenen Konfiguration
+    const botConfig: BotConfig = {
+      riskPercentage: bot.riskPercentage,
+      ...config // Übernimm alle weiteren Konfigurationsparameter
+    };
+    
     const botInstance = createBot(
       bot.strategyType,
       provider,
       marketAddress,
-      bot.riskPercentage
+      botConfig
     );
     
     await botInstance.initialize();
@@ -130,6 +157,9 @@ export async function startTradingBot(botId: string) {
     botInstances.set(botId, botInstance);
 
     console.log(`Bot ${botId} (${bot.strategyType}) gestartet mit Risiko: ${bot.riskPercentage}%`);
+    if (config.useNewTokensOnly) {
+      console.log(`Modus: Nur neue Token unter ${config.maxTokenAgeHours || 24} Stunden`);
+    }
 
     // Starte Trading-Loop
     const intervalId = setInterval(async () => {
@@ -164,9 +194,6 @@ export async function startTradingBot(botId: string) {
             break;
           case BotType.DIP_HUNTER:
             tradeResult = await (botInstance as DipHunter).findAndTradeDip();
-            break;
-          case BotType.NEW_TOKEN_HUNTER:
-            tradeResult = await (botInstance as NewTokenHunter).scanAndTrade();
             break;
         }
 
