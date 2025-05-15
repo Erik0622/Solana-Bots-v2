@@ -3,7 +3,7 @@ use anchor_spl::token::{self, Token, TokenAccount, Transfer};
 use solana_program::program::invoke;
 use solana_program::system_instruction;
 
-declare_id!("YOUR_PROGRAM_ID");
+declare_id!("AaT7QFrQd49Lf2T6UkjrGp7pSW3KvCTQwCLJTPuHUBV9");
 
 #[program]
 pub mod trading_bot {

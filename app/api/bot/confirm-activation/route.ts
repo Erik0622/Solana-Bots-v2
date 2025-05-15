@@ -3,8 +3,11 @@ import { Connection, Transaction } from '@solana/web3.js';
 import { PrismaClient } from '@prisma/client';
 import { startTradingBot, stopTradingBot } from '@/lib/trading/bot';
 
+// Alchemy RPC URL für Solana Mainnet
+const SOLANA_RPC_URL = process.env.SOLANA_RPC_URL || 'https://solana-mainnet.g.alchemy.com/v2/ajXi9mI9_OF6a0Nfy6PZ-05JT29nTxFm';
+
 const prisma = new PrismaClient();
-const connection = new Connection(process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com');
+const connection = new Connection(SOLANA_RPC_URL);
 
 export async function POST(request: Request) {
   try {

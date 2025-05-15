@@ -12,13 +12,13 @@ const Header: FC = () => {
           <div className="w-10 h-10 relative">
             <Image 
               src="/logo.svg" 
-              alt="Solana Trading Bots Logo" 
+              alt="SolBotQuants Logo" 
               width={40}
               height={40}
               priority
             />
           </div>
-          <span className="text-xl font-bold text-white">Solana<span className="text-primary">Bots</span></span>
+          <span className="text-xl font-bold text-white">Sol<span className="text-primary">Bot</span><span className="text-[#FAD02C]">Quants</span></span>
         </div>
         
         <nav className="hidden md:flex items-center space-x-8 mr-8">

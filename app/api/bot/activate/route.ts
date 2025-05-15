@@ -4,16 +4,16 @@ import * as anchor from '@project-serum/anchor';
 import { BotType } from '@/lib/trading/bot';
 import prisma from '@/lib/prisma';
 
-// Fallback-Werte für Vercel-Bereitstellung
-const FALLBACK_RPC_URL = 'https://api.mainnet-beta.solana.com';
-// Verwenden einer gültigen Programm-ID als Fallback (Solana System Program)
-const FALLBACK_PROGRAM_ID = '11111111111111111111111111111111';
+// Alchemy RPC URL für Solana Mainnet
+const SOLANA_RPC_URL = process.env.SOLANA_RPC_URL || 'https://solana-mainnet.g.alchemy.com/v2/ajXi9mI9_OF6a0Nfy6PZ-05JT29nTxFm';
+// Solana Programm-ID für den Trading Bot
+const BOT_PROGRAM_ID = process.env.BOT_PROGRAM_ID || 'AaT7QFrQd49Lf2T6UkjrGp7pSW3KvCTQwCLJTPuHUBV9';
 
-const connection = new Connection(process.env.SOLANA_RPC_URL || FALLBACK_RPC_URL);
+const connection = new Connection(SOLANA_RPC_URL);
 
 // Bot-Programm IDL importieren
 const idl = require('../../../../target/idl/trading_bot.json');
-const programId = new PublicKey(process.env.BOT_PROGRAM_ID || FALLBACK_PROGRAM_ID);
+const programId = new PublicKey(BOT_PROGRAM_ID);
 
 export async function POST(request: Request) {
   try {

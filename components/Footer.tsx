@@ -6,9 +6,9 @@ const Footer: FC = () => {
       <div className="container mx-auto">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           <div>
-            <h4 className="text-lg font-bold text-white mb-4">SolanaBots</h4>
+            <h4 className="text-lg font-bold text-white mb-4">SolBotQuants</h4>
             <p className="text-white/60 mb-4">
-              Automated trading solutions for the Solana blockchain with proven profitability and modern risk management.
+              Intelligente Trading-Bots für die Solana-Blockchain mit nachgewiesener Rentabilität und modernem Risikomanagement.
             </p>
             <p className="text-white/60 text-sm">
               Developer Wallet: <br />
@@ -46,7 +46,7 @@ const Footer: FC = () => {
         </div>
         
         <div className="border-t border-dark-lighter mt-12 pt-8 text-center text-white/60">
-          <p>© {new Date().getFullYear()} SolanaBots. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} SolBotQuants. All rights reserved.</p>
           <p className="mt-2 text-sm">
             Trading bots involve inherent risks. Past performance is not indicative of future results.
           </p>
