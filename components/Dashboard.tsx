@@ -4,7 +4,7 @@ import React, { FC, useState, useEffect } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area } from 'recharts';
-import { Connection, LAMPORTS_PER_SOL, PublicKey } from '@solana/web3.js';
+import { Connection, LAMPORTS_PER_SOL, PublicKey, Transaction } from '@solana/web3.js';
 import { useConnection } from '@solana/wallet-adapter-react';
 
 interface BotTransaction {
@@ -44,7 +44,7 @@ interface ConnectedBot {
 }
 
 const Dashboard: FC = () => {
-  const { connected, publicKey } = useWallet();
+  const { connected, publicKey, signTransaction } = useWallet();
   const { connection } = useConnection();
   const [activeTab, setActiveTab] = useState<'positions' | 'performance' | 'bots'>('positions');
   const [timeframe, setTimeframe] = useState<'7d' | '30d' | 'all'>('30d');
@@ -57,88 +57,74 @@ const Dashboard: FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Simulate fetching data when wallet is connected
   useEffect(() => {
     if (connected && publicKey) {
-      // Echte API-Aufrufe statt Mock-Daten
       fetchPositions();
       fetchPerformanceData();
       fetchConnectedBots();
     }
   }, [connected, publicKey, timeframe]);
 
-  // Fetch wallet balance
   useEffect(() => {
     const fetchBalance = async () => {
-      if (connected && publicKey) {
+      console.log("fetchBalance called. Connected:", connected, "PublicKey:", publicKey?.toBase58(), "Connection object available:", !!connection);
+      if (connected && publicKey && connection) {
         try {
-          const balance = await connection.getBalance(publicKey);
-          setWalletBalance(balance / LAMPORTS_PER_SOL);
+          console.log("Fetching balance for:", publicKey.toBase58());
+          const balanceLamports = await connection.getBalance(publicKey);
+          console.log("Raw balance (lamports):", balanceLamports);
+          const balanceSol = balanceLamports / LAMPORTS_PER_SOL;
+          console.log("Converted balance (SOL):", balanceSol);
+          setWalletBalance(balanceSol);
         } catch (error) {
           console.error('Error fetching balance:', error);
-          // Setze einen Standardwert, falls der Abruf fehlschlägt
           setWalletBalance(0);
         }
       } else {
+        console.log("Not connected or no public key/connection, setting balance to 0");
         setWalletBalance(0);
       }
     };
 
     fetchBalance();
-    const intervalId = setInterval(fetchBalance, 10000); // Update every 10 seconds
+    const intervalId = setInterval(fetchBalance, 10000);
 
     return () => clearInterval(intervalId);
   }, [connected, publicKey, connection]);
 
   const fetchPositions = async () => {
     if (!connected || !publicKey) return;
-
     try {
-      // Here you would typically fetch from your backend API
       const response = await fetch(`/api/positions?wallet=${publicKey.toString()}`);
       if (!response.ok) throw new Error('Failed to fetch positions');
-      
-      const positions = await response.json();
-      setPositions(positions);
-      
-      // Calculate real profits
-      const totalProfit = positions.reduce((sum: number, pos: Position) => sum + pos.profit, 0);
-      const devFee = totalProfit * 0.1; // 10% of profits
-    
-      setTotalProfit(prev => ({ ...prev, all: totalProfit }));
+      const data = await response.json();
+      setPositions(data);
+      const calculatedTotalProfit = data.reduce((sum: number, pos: Position) => sum + pos.profit, 0);
+      const devFee = calculatedTotalProfit * 0.1;
+      setTotalProfit(prev => ({ ...prev, all: calculatedTotalProfit }));
       setDevFees(prev => ({ ...prev, total: devFee }));
     } catch (error) {
       console.error('Error fetching positions:', error);
-      // Keep the previous positions if there's an error
     }
   };
 
   const fetchPerformanceData = async () => {
     if (!connected || !publicKey) return;
-
     try {
-      // Fetch real performance data from your backend
-      const response = await fetch(
-        `/api/performance?wallet=${publicKey.toString()}&timeframe=${timeframe}`
-      );
+      const response = await fetch(`/api/performance?wallet=${publicKey.toString()}&timeframe=${timeframe}`);
       if (!response.ok) throw new Error('Failed to fetch performance data');
-      
       const data = await response.json();
-      
-      // Wenn keine Daten vorhanden sind, zeige leere Daten statt simulierter Daten
       if (data.performanceData && data.performanceData.length > 0) {
         setPerformanceData(data.performanceData);
         setTotalProfit(data.totalProfit);
         setDevFees(data.devFees);
       } else {
-        // Leere Daten anzeigen
         setPerformanceData([]);
         setTotalProfit({ today: 0, week: 0, month: 0, all: 0 });
         setDevFees({ total: 0, month: 0 });
       }
     } catch (error) {
       console.error('Error fetching performance data:', error);
-      // Leere Daten anzeigen statt vorherige Daten beizubehalten
       setPerformanceData([]);
       setTotalProfit({ today: 0, week: 0, month: 0, all: 0 });
       setDevFees({ total: 0, month: 0 });
@@ -147,90 +133,100 @@ const Dashboard: FC = () => {
 
   const fetchConnectedBots = async () => {
     if (!connected || !publicKey) return;
-
     try {
-      // Fetch real bot data from your backend
       const response = await fetch(`/api/bots?wallet=${publicKey.toString()}`);
       if (!response.ok) throw new Error('Failed to fetch bots');
-      
-      const bots = await response.json();
-      setConnectedBots(bots);
+      const data = await response.json();
+      setConnectedBots(data);
     } catch (error) {
       console.error('Error fetching bots:', error);
-      // Keep the previous bot data if there's an error
     }
   };
 
   const toggleBotStatus = async (botId: string) => {
-    if (!connected || !publicKey) return;
+    if (!connected || !publicKey || !signTransaction) {
+      setErrorMessage('Wallet not connected or does not support signing transactions.');
+      return;
+    }
     
     setIsLoading(true);
     setErrorMessage(null);
 
     try {
-      // Bestimme die aktuelle Aktion basierend auf dem Bot-Status
       const currentBot = connectedBots.find(b => b.id === botId);
-      const action = currentBot?.status === 'active' ? 'pause' : 'activate';
+      if (!currentBot) {
+        throw new Error('Bot not found locally.');
+      }
 
-      // Erstelle den API-Endpunkt basierend auf der Aktion
-      const endpoint = action === 'activate' ? '/api/bot/activate' : '/api/bot/deactivate';
+      const uiAction = currentBot.status === 'active' ? 'pause' : 'resume';
+      const backendApiAction = uiAction === 'resume' ? 'activate' : 'deactivate';
 
-      const response = await fetch(endpoint, {
+      // Derive botType from name, e.g., "Volume Tracker Bot" -> "volume-tracker"
+      const derivedBotType = currentBot.name.replace(/ Bot$/i, '').toLowerCase().replace(/\s+/g, '-');
+
+      // 1. Fetch unsigned transaction from our backend
+      const prepareTxResponse = await fetch('/api/bot/activate', { // This endpoint handles both activate and deactivate
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           botId,
           walletAddress: publicKey.toString(),
-          riskPercentage: 5, // Standardwert, könnte aus einer Einstellung kommen
-          action,
-          botType: currentBot?.name.toLowerCase() || 'volume-tracker' // Fallback auf einen Standardwert
+          riskPercentage: 5, // This should ideally be configurable per bot
+          action: backendApiAction,
+          botType: derivedBotType 
         }),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to toggle bot status');
+      if (!prepareTxResponse.ok) {
+        const errorData = await prepareTxResponse.json();
+        throw new Error(errorData.error || 'Failed to prepare transaction.');
       }
       
-      const data = await response.json();
+      const { transaction: serializedUnsignedTx, botPda } = await prepareTxResponse.json();
+
+      // 2. Deserialize and sign the transaction with the user's wallet
+      const transaction = Transaction.from(Buffer.from(serializedUnsignedTx, 'base64'));
       
-      // Hier würden wir normalerweise die signierte Transaktion zum Benutzer senden
-      // und nach Bestätigung den Status in der UI aktualisieren
+      console.log("Signing transaction:", transaction);
+      const signedTx = await signTransaction(transaction);
+      console.log("Transaction signed:", signedTx);
       
-      // Bestätige die Transaktion über eine zweite API
+      const serializedSignedTx = Buffer.from(signedTx.serialize()).toString('base64');
+
+      // 3. Send the signed transaction to the confirmation endpoint
       const confirmResponse = await fetch('/api/bot/confirm-activation', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           botId,
-          signedTransaction: data.transaction,
-          action
+          signedTransaction: serializedSignedTx,
+          action: backendApiAction 
         }),
       });
       
       if (!confirmResponse.ok) {
         const errorData = await confirmResponse.json();
-        throw new Error(errorData.error || 'Failed to confirm bot activation');
+        throw new Error(errorData.error || 'Failed to confirm bot activation/deactivation.');
       }
       
-      // Update local state after successful API call
+      const confirmationData = await confirmResponse.json();
+      console.log("Confirmation data:", confirmationData);
+
+      // Update local state after successful API call chain
       setConnectedBots(bots => 
         bots.map(bot => 
           bot.id === botId ? 
-            {...bot, status: action === 'activate' ? 'active' : 'paused'} : 
+            {...bot, status: backendApiAction === 'activate' ? 'active' : 'paused'} : 
             bot
         )
       );
-      
-      setIsLoading(false);
+      // Optionally, refetch bots to get the very latest state from DB
+      // await fetchConnectedBots(); 
+
     } catch (error) {
       console.error('Error toggling bot status:', error);
-      // Show specific error to user
-      setErrorMessage(error instanceof Error ? error.message : 'Failed to update bot status. Please try again.');
+      setErrorMessage(error instanceof Error ? error.message : 'An unknown error occurred.');
+    } finally {
       setIsLoading(false);
     }
   };
@@ -252,12 +248,12 @@ const Dashboard: FC = () => {
       <div className="container mx-auto">
         <h2 className="text-3xl font-bold mb-8">Trading Dashboard</h2>
         
-        {/* Show error message if exists */}
         {errorMessage && (
-          <div className="bg-red-900/50 text-white p-4 rounded-lg mb-6">
+          <div className="bg-red-900/50 text-red-300 p-4 rounded-lg mb-6 border border-red-700">
+            <p className="font-semibold">Error:</p>
             <p>{errorMessage}</p>
             <button 
-              className="text-xs underline mt-2" 
+              className="text-xs underline mt-2 text-red-300 hover:text-red-100"
               onClick={() => setErrorMessage(null)}
             >
               Dismiss
@@ -265,7 +261,6 @@ const Dashboard: FC = () => {
           </div>
         )}
         
-        {/* Summary cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
           <div className="stat-card bg-dark-lighter p-4 sm:p-6 rounded-lg backdrop-blur-sm hover:border-primary hover:border border-transparent transition-all">
             <p className="text-white/60 mb-1 text-sm sm:text-base">Wallet Balance</p>
@@ -290,7 +285,6 @@ const Dashboard: FC = () => {
           </div>
         </div>
         
-        {/* Tabs */}
         <div className="flex overflow-x-auto border-b border-dark-lighter mb-6">
           <button 
             className={`px-3 sm:px-6 py-3 whitespace-nowrap ${activeTab === 'positions' ? 'text-primary border-b-2 border-primary' : 'text-white/60'}`}
@@ -312,7 +306,6 @@ const Dashboard: FC = () => {
           </button>
         </div>
         
-        {/* Tab content */}
         {activeTab === 'positions' && (
           <div className="overflow-x-auto -mx-6 px-6">
             <table className="w-full text-left min-w-[800px]">
