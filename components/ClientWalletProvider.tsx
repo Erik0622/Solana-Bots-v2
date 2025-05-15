@@ -4,7 +4,7 @@ import React, { FC, ReactNode, useMemo } from 'react';
 import { ConnectionProvider, WalletProvider } from '@solana/wallet-adapter-react';
 import { WalletAdapterNetwork } from '@solana/wallet-adapter-base';
 import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
-import { clusterApiUrl } from '@solana/web3.js';
+import { Connection, Commitment } from '@solana/web3.js';
 import {
   PhantomWalletAdapter,
   SolflareWalletAdapter,
@@ -18,11 +18,27 @@ interface ClientWalletProviderProps {
 }
 
 const ClientWalletProvider: FC<ClientWalletProviderProps> = ({ children }) => {
-  // Das Netzwerk kann auf 'devnet', 'testnet' oder 'mainnet-beta' gesetzt werden
-  const network = WalletAdapterNetwork.Mainnet;
+  // Direkter Zugriff auf Alchemy RPC URL
+  const ALCHEMY_RPC_URL = 'https://solana-mainnet.g.alchemy.com/v2/ajXi9mI9_OF6a0Nfy6PZ-05JT29nTxFm';
+  
+  // Backup RPC URLs, falls Alchemy nicht erreichbar ist
+  const BACKUP_RPC_URLS = [
+    'https://api.mainnet-beta.solana.com',
+    'https://solana-api.projectserum.com'
+  ];
+  
+  // Connection-Optionen für bessere Zuverlässigkeit
+  const commitment: Commitment = 'confirmed';
+  const connectionConfig = {
+    commitment,
+    disableRetryOnRateLimit: false,
+    confirmTransactionInitialTimeout: 60000,
+  };
 
-  // Sie können auch eine beliebige Verbindungs-URL verwenden
-  const endpoint = useMemo(() => clusterApiUrl(network), [network]);
+  const endpoint = ALCHEMY_RPC_URL;
+  
+  // Connection mit den optimierten Optionen erstellen
+  const connection = new Connection(endpoint, connectionConfig);
 
   const wallets = useMemo(
     () => [
@@ -33,7 +49,7 @@ const ClientWalletProvider: FC<ClientWalletProviderProps> = ({ children }) => {
   );
 
   return (
-    <ConnectionProvider endpoint={endpoint}>
+    <ConnectionProvider endpoint={endpoint} config={connectionConfig}>
       <WalletProvider wallets={wallets} autoConnect>
         <WalletModalProvider>{children}</WalletModalProvider>
       </WalletProvider>
