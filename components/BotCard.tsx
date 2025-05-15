@@ -1,6 +1,6 @@
 'use client';
 
-import React, { FC, useState } from 'react';
+import React, { FC, useState, useEffect } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { LineChart, Line, ResponsiveContainer, Tooltip, YAxis } from 'recharts';
@@ -52,6 +52,43 @@ const BotCard: FC<BotCardProps> = ({
   const [riskPercentage, setRiskPercentage] = useState(baseRiskPerTrade);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [performanceData, setPerformanceData] = useState<Array<{date: string; profit: number; cumulative: number}>>([]);
+  const [totalProfit, setTotalProfit] = useState("0.00");
+  const [averageProfit, setAverageProfit] = useState("0.00");
+
+  // Lade Performance-Daten
+  useEffect(() => {
+    const fetchPerformanceData = async () => {
+      if (!publicKey) return;
+
+      try {
+        const response = await fetch(`/api/performance?wallet=${publicKey.toString()}&timeframe=${performanceTimeframe}`);
+        if (!response.ok) {
+          console.error('Fehler beim Laden der Performance-Daten:', response.status);
+          return;
+        }
+
+        const data = await response.json();
+        if (data.performanceData && Array.isArray(data.performanceData)) {
+          setPerformanceData(data.performanceData);
+          
+          // Berechne Gesamtrendite und Durchschnitt
+          if (data.performanceData.length > 0) {
+            const total = data.performanceData.reduce((sum: number, day: {profit: number}) => sum + day.profit, 0).toFixed(2);
+            setTotalProfit(total);
+            setAverageProfit((Number(total) / data.performanceData.length).toFixed(2));
+          } else {
+            setTotalProfit("0.00");
+            setAverageProfit("0.00");
+          }
+        }
+      } catch (err) {
+        console.error('Fehler beim Abrufen der Performance-Daten:', err);
+      }
+    };
+
+    fetchPerformanceData();
+  }, [publicKey, performanceTimeframe]);
   
   // Handle risk slider change
   const handleRiskChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -61,59 +98,6 @@ const BotCard: FC<BotCardProps> = ({
       onRiskChange(newRisk);
     }
   };
-
-  // Generate mock performance data
-  const generatePerformanceData = (days: number) => {
-    const data = [];
-    const now = new Date();
-    
-    // Different patterns for different bots (fixed, not affected by risk slider)
-    const getProfit = (i: number) => {
-      switch (id) {
-        case 'vol-tracker':
-          return 0.4 + (Math.sin(i * 0.5) * 0.3) + (Math.random() * 0.2);
-        case 'trend-surfer':
-          return 0.7 + (Math.sin(i * 0.3) * 0.5) + (Math.random() * 0.3);
-        case 'arb-finder':
-          return 0.3 + (Math.cos(i * 0.2) * 0.1) + (Math.random() * 0.1);
-        default:
-          return 0.5 + (Math.random() * 0.3);
-      }
-    };
-    
-    // Use a fixed seed for random to ensure the chart shape remains consistent
-    const seededRandom = (i: number) => {
-      return Math.sin(i * 9876) * 10000 % 1;
-    };
-    
-    for (let i = days; i >= 0; i--) {
-      const date = new Date(now);
-      date.setDate(date.getDate() - i);
-      
-      // Use the fixed pattern but scale the values based on the risk percentage
-      let baseProfit = getProfit(i);
-      
-      // Apply a scaling factor based on the bot's base risk profile
-      // but don't change the shape of the chart
-      const scalingFactor = baseRiskPerTrade / 15; // 15% is our reference point
-      const profit = baseProfit * scalingFactor;
-      
-      data.push({
-        date: date.toISOString().split('T')[0],
-        profit: parseFloat(profit.toFixed(2))
-      });
-    }
-    
-    return data;
-  };
-  
-  const performanceData = performanceTimeframe === '7d' 
-    ? generatePerformanceData(7) 
-    : generatePerformanceData(30);
-  
-  // Calculate totals
-  const totalProfit = performanceData.reduce((sum, day) => sum + day.profit, 0).toFixed(2);
-  const averageProfit = (performanceData.reduce((sum, day) => sum + day.profit, 0) / performanceData.length).toFixed(2);
 
   const getRiskColor = (risk: string) => {
     switch (risk) {

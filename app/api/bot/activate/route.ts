@@ -9,20 +9,73 @@ const SOLANA_RPC_URL = process.env.SOLANA_RPC_URL || 'https://solana-mainnet.g.a
 // Solana Programm-ID für den Trading Bot
 const BOT_PROGRAM_ID = process.env.BOT_PROGRAM_ID || 'AaT7QFrQd49Lf2T6UkjrGp7pSW3KvCTQwCLJTPuHUBV9';
 
-const connection = new Connection(SOLANA_RPC_URL);
+const connection = new Connection(SOLANA_RPC_URL, {
+  commitment: 'confirmed'
+});
 
-// Bot-Programm IDL importieren
-const idl = require('../../../../target/idl/trading_bot.json');
+// Definiere Typ für IDL
+interface TradingBotIdl {
+  version: string;
+  name: string;
+  instructions: any[];
+  [key: string]: any;
+}
+
+// Bot-Programm IDL importieren - mit try-catch um Fehler abzufangen
+let idl: TradingBotIdl;
+try {
+  idl = require('../../../../target/idl/trading_bot.json');
+} catch (error) {
+  console.error('Fehler beim Laden des IDL:', error);
+  // Fallback-IDL, falls das echte nicht geladen werden kann
+  idl = {
+    version: "0.1.0",
+    name: "trading_bot",
+    instructions: [
+      {
+        name: "initializeBot",
+        accounts: [
+          { name: "bot", isMut: true, isSigner: false },
+          { name: "user", isMut: true, isSigner: true },
+          { name: "systemProgram", isMut: false, isSigner: false }
+        ],
+        args: [{ name: "botType", type: "string" }]
+      },
+      {
+        name: "activateBot",
+        accounts: [
+          { name: "bot", isMut: true, isSigner: false },
+          { name: "user", isMut: true, isSigner: true }
+        ],
+        args: []
+      },
+      {
+        name: "deactivateBot",
+        accounts: [
+          { name: "bot", isMut: true, isSigner: false },
+          { name: "user", isMut: true, isSigner: true }
+        ],
+        args: []
+      }
+    ]
+  };
+}
+
 const programId = new PublicKey(BOT_PROGRAM_ID);
 
 export async function POST(request: Request) {
   try {
     const { botId, walletAddress, riskPercentage, action, botType } = await request.json();
+    
+    console.log("Bot Aktivierung angefordert:", { botId, walletAddress, action, botType });
 
     // Validiere Eingaben
-    if (!botId || !walletAddress || !riskPercentage) {
-      return NextResponse.json({ error: 'Fehlende Parameter' }, { status: 400 });
+    if (!botId || !walletAddress) {
+      return NextResponse.json({ error: 'Fehlende Parameter: botId und walletAddress sind erforderlich' }, { status: 400 });
     }
+
+    // Verwende einen Standard-Risikoprozentsatz, falls nicht angegeben
+    const riskValue = riskPercentage || 5;
 
     // Bestimme Bot-Typ
     let strategyType;
@@ -47,12 +100,13 @@ export async function POST(request: Request) {
 
     if (!bot) {
       // Erstelle neuen Bot in der Datenbank
+      console.log(`Erstelle neuen Bot: ${botId}, Typ: ${strategyType}`);
       bot = await prisma.bot.create({
         data: {
           id: botId,
           name: `${botType} Bot`,
           walletAddress,
-          riskPercentage,
+          riskPercentage: riskValue,
           strategyType,
           isActive: false
         }
@@ -68,11 +122,13 @@ export async function POST(request: Request) {
       programId
     );
 
+    console.log(`Bot PDA: ${botPda.toBase58()}`);
+
     // Erstelle Provider und Programm
     const provider = new anchor.AnchorProvider(
       connection,
       {} as any, // Wird später durch die Wallet des Users ersetzt
-      { commitment: 'processed' }
+      { commitment: 'confirmed' }
     );
     const program = new anchor.Program(idl, programId, provider);
 
@@ -82,14 +138,12 @@ export async function POST(request: Request) {
     if (action === 'activate') {
       // Wenn der Bot noch nicht initialisiert wurde, füge initialize_bot Instruktion hinzu
       if (!bot.isActive) {
+        console.log("Füge initialize_bot Instruktion hinzu");
         transaction.add(
-          await program.methods.initializeBot(
-            riskPercentage,
-            getBotStrategyTypeValue(strategyType) // Konvertiere String zu numerischem Wert
-          )
+          await program.methods.initializeBot(strategyType)
           .accounts({
             bot: botPda,
-            owner: userWallet,
+            user: userWallet,
             systemProgram: anchor.web3.SystemProgram.programId,
           })
           .instruction()
@@ -97,21 +151,23 @@ export async function POST(request: Request) {
       }
 
       // Füge activate_bot Instruktion hinzu
+      console.log("Füge activateBot Instruktion hinzu");
       transaction.add(
         await program.methods.activateBot()
         .accounts({
           bot: botPda,
-          owner: userWallet,
+          user: userWallet,
         })
         .instruction()
       );
     } else {
       // Füge deactivate_bot Instruktion hinzu
+      console.log("Füge deactivateBot Instruktion hinzu");
       transaction.add(
         await program.methods.deactivateBot()
         .accounts({
           bot: botPda,
-          owner: userWallet,
+          user: userWallet,
         })
         .instruction()
       );
@@ -123,6 +179,8 @@ export async function POST(request: Request) {
       verifySignatures: false,
     }).toString('base64');
 
+    console.log("Transaktion erfolgreich erstellt");
+
     return NextResponse.json({ 
       transaction: serializedTransaction,
       botPda: botPda.toBase58(),
@@ -130,7 +188,7 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error('Bot activation error:', error);
-    return NextResponse.json({ error: 'Fehler bei der Bot-Aktivierung' }, { status: 500 });
+    return NextResponse.json({ error: `Fehler bei der Bot-Aktivierung: ${error instanceof Error ? error.message : 'Unbekannter Fehler'}` }, { status: 500 });
   }
 }
 
