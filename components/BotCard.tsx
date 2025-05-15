@@ -148,7 +148,7 @@ const BotCard: FC<BotCardProps> = ({
           botId: id,
           walletAddress: publicKey.toString(),
           riskPercentage: riskPercentage,
-          action: status === 'active' ? 'pause' : 'activate',
+          action: status === 'active' ? 'deactivate' : 'activate',
           botType: getBotTypeFromName(name)
         }),
       });
@@ -171,7 +171,8 @@ const BotCard: FC<BotCardProps> = ({
         },
         body: JSON.stringify({
           botId: id,
-          signedTransaction: signedTransaction.serialize().toString('base64')
+          signedTransaction: signedTransaction.serialize().toString('base64'),
+          action: status === 'active' ? 'deactivate' : 'activate'
         }),
       });
 

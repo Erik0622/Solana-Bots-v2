@@ -39,7 +39,9 @@ export async function POST(request: Request) {
           await connection.confirmTransaction(signature);
           
           let result;
-          if (action === 'deactivate' || bot.isActive) {
+          const isDeactivating = action === 'deactivate';
+          
+          if (isDeactivating) {
             // Bot deaktivieren
             await prisma.bot.update({
               where: { id: botId },
@@ -47,6 +49,7 @@ export async function POST(request: Request) {
             });
             
             result = await stopTradingBot(botId);
+            console.log(`Bot ${botId} wurde deaktiviert`);
           } else {
             // Bot aktivieren
             await prisma.bot.update({
@@ -55,13 +58,14 @@ export async function POST(request: Request) {
             });
             
             result = await startTradingBot(botId);
+            console.log(`Bot ${botId} wurde aktiviert`);
           }
 
           // Erstelle einen Trade-Log-Eintrag
           await prisma.trade.create({
             data: {
               botId,
-              type: bot.isActive ? 'deactivation' : 'activation',
+              type: isDeactivating ? 'deactivation' : 'activation',
               amount: 0,
               price: 0,
               txSignature: signature
@@ -72,7 +76,8 @@ export async function POST(request: Request) {
             success: true,
             signature,
             message: result.message,
-            status: result.status
+            status: result.status,
+            isActive: !isDeactivating
           });
         } catch (confirmError) {
           console.error('Transaction confirmation error:', confirmError);

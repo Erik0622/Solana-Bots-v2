@@ -3,30 +3,6 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-// Mock-Daten für die Entwicklung
-const MOCK_POSITIONS = [
-  {
-    id: 'pos_1',
-    botType: 'Volume Tracker Bot',
-    entryDate: '2023-10-25',
-    entryPrice: 28.45,
-    currentPrice: 32.18,
-    size: 2.5,
-    profit: 9.32,
-    profitPercentage: 13.11
-  },
-  {
-    id: 'pos_2',
-    botType: 'Trend Surfer Bot',
-    entryDate: '2023-10-28',
-    entryPrice: 1920.65,
-    currentPrice: 2105.30,
-    size: 0.15,
-    profit: 27.70,
-    profitPercentage: 9.61
-  }
-];
-
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -69,15 +45,12 @@ export async function GET(request: Request) {
 
       return NextResponse.json(formattedPositions);
     } catch (dbError) {
-      console.warn('Datenbankfehler, verwende Mock-Daten:', dbError);
-      
-      // Wenn die Datenbankabfrage fehlschlägt, gib Mock-Daten zurück
-      return NextResponse.json(MOCK_POSITIONS);
+      console.error('Datenbankfehler bei positions API:', dbError);
+      // Bei einem Datenbankfehler leere Liste zurückgeben, keine Mock-Daten
+      return NextResponse.json([]);
     }
   } catch (error) {
     console.error('Error in positions API:', error);
-    
-    // Im Fehlerfall auch Mock-Daten zurückgeben
-    return NextResponse.json(MOCK_POSITIONS);
+    return NextResponse.json({ error: 'Serverfehler bei Positions-Abfrage' }, { status: 500 });
   }
 } 
