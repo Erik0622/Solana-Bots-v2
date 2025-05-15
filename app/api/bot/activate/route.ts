@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { Connection, PublicKey, Transaction } from '@solana/web3.js';
 import * as anchor from '@project-serum/anchor';
 import { BotType } from '@/lib/trading/bot';
-import prisma from '@/lib/prisma';
+import prisma, { getMockModeStatus } from '@/lib/prisma';
 
 // Alchemy RPC URL für Solana Mainnet
 const SOLANA_RPC_URL = process.env.SOLANA_RPC_URL || 'https://solana-mainnet.g.alchemy.com/v2/ajXi9mI9_OF6a0Nfy6PZ-05JT29nTxFm';
@@ -93,24 +93,67 @@ export async function POST(request: Request) {
         strategyType = BotType.VOLUME_TRACKER; // Standardwert
     }
 
-    // Hole Bot aus der Datenbank oder erstelle einen neuen
-    let bot = await prisma.bot.findUnique({
-      where: { id: botId }
-    });
+    // Prüfe, ob wir im Mock-Modus sind
+    const isMockMode = getMockModeStatus();
+    if (isMockMode) {
+      console.log("Aktiviere Bot im Mock-Modus");
+      
+      // Generiere eine simulierte Transaktion
+      const transaction = new Transaction();
+      const userWallet = new PublicKey(walletAddress);
+      
+      // Generiere ein "gefälschtes" PDA für Simulationszwecke
+      const mockPda = PublicKey.findProgramAddressSync(
+        [Buffer.from('mock_bot'), userWallet.toBuffer()],
+        programId
+      )[0];
+      
+      // Serialisiere die leere Transaktion
+      const serializedTransaction = transaction.serialize({
+        requireAllSignatures: false,
+        verifySignatures: false,
+      }).toString('base64');
 
-    if (!bot) {
-      // Erstelle neuen Bot in der Datenbank
-      console.log(`Erstelle neuen Bot: ${botId}, Typ: ${strategyType}`);
-      bot = await prisma.bot.create({
-        data: {
-          id: botId,
-          name: `${botType} Bot`,
-          walletAddress,
-          riskPercentage: riskValue,
-          strategyType,
-          isActive: false
-        }
+      return NextResponse.json({ 
+        transaction: serializedTransaction,
+        botPda: mockPda.toBase58(),
+        botType: strategyType,
+        isMockMode: true
       });
+    }
+
+    // Versuche Bot aus der Datenbank zu holen oder erstelle einen neuen
+    let bot;
+    try {
+      bot = await prisma.bot.findUnique({
+        where: { id: botId }
+      });
+
+      if (!bot) {
+        // Erstelle neuen Bot in der Datenbank
+        console.log(`Erstelle neuen Bot: ${botId}, Typ: ${strategyType}`);
+        bot = await prisma.bot.create({
+          data: {
+            id: botId,
+            name: `${botType} Bot`,
+            walletAddress,
+            riskPercentage: riskValue,
+            strategyType,
+            isActive: false
+          }
+        });
+      }
+    } catch (dbError) {
+      console.error('Datenbankfehler bei Bot-Aktivierung:', dbError);
+      // Bei Datenbankfehler trotzdem fortfahren, aber mit einem "virtuellen" Bot-Objekt
+      bot = {
+        id: botId,
+        name: `${botType} Bot`,
+        walletAddress,
+        riskPercentage: riskValue,
+        strategyType,
+        isActive: false
+      };
     }
 
     // Erstelle Wallet-PublicKey
