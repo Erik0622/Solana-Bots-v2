@@ -22,7 +22,7 @@ const Header: FC = () => {
         </div>
         
         <nav className="hidden md:flex items-center space-x-8 mr-8">
-          <a href="#features" className="text-white/80 hover:text-primary transition-colors">Funktionen</a>
+          <a href="#features" className="text-white/80 hover:text-primary transition-colors">Features</a>
           <a href="#bots" className="text-white/80 hover:text-primary transition-colors">Trading Bots</a>
           <a href="#performance" className="text-white/80 hover:text-primary transition-colors">Performance</a>
         </nav>

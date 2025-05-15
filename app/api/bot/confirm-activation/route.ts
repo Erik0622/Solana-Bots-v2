@@ -15,7 +15,7 @@ export async function POST(request: Request) {
 
     // Validiere Eingaben
     if (!botId || !signedTransaction) {
-      return NextResponse.json({ error: 'Fehlende Parameter' }, { status: 400 });
+      return NextResponse.json({ error: 'Missing parameters - botId and signedTransaction are required' }, { status: 400 });
     }
 
     // Hole Bot aus der Datenbank
@@ -24,54 +24,79 @@ export async function POST(request: Request) {
     });
 
     if (!bot) {
-      return NextResponse.json({ error: 'Bot nicht gefunden' }, { status: 404 });
+      return NextResponse.json({ error: 'Bot not found in database. Please create the bot first.' }, { status: 404 });
     }
 
     // Deserialisiere die signierte Transaktion
-    const transaction = Transaction.from(Buffer.from(signedTransaction, 'base64'));
-
-    // Sende und bestätige Transaktion
-    const signature = await connection.sendRawTransaction(transaction.serialize());
-    await connection.confirmTransaction(signature);
-
-    let result;
-    if (action === 'deactivate' || bot.isActive) {
-      // Bot deaktivieren
-      await prisma.bot.update({
-        where: { id: botId },
-        data: { isActive: false }
-      });
+    try {
+      const transaction = Transaction.from(Buffer.from(signedTransaction, 'base64'));
       
-      result = await stopTradingBot(botId);
-    } else {
-      // Bot aktivieren
-      await prisma.bot.update({
-        where: { id: botId },
-        data: { isActive: true }
-      });
-      
-      result = await startTradingBot(botId);
-    }
+      // Sende und bestätige Transaktion
+      try {
+        const signature = await connection.sendRawTransaction(transaction.serialize());
+        
+        try {
+          await connection.confirmTransaction(signature);
+          
+          let result;
+          if (action === 'deactivate' || bot.isActive) {
+            // Bot deaktivieren
+            await prisma.bot.update({
+              where: { id: botId },
+              data: { isActive: false }
+            });
+            
+            result = await stopTradingBot(botId);
+          } else {
+            // Bot aktivieren
+            await prisma.bot.update({
+              where: { id: botId },
+              data: { isActive: true }
+            });
+            
+            result = await startTradingBot(botId);
+          }
 
-    // Erstelle einen Trade-Log-Eintrag
-    await prisma.trade.create({
-      data: {
-        botId,
-        type: bot.isActive ? 'deactivation' : 'activation',
-        amount: 0,
-        price: 0,
-        txSignature: signature
+          // Erstelle einen Trade-Log-Eintrag
+          await prisma.trade.create({
+            data: {
+              botId,
+              type: bot.isActive ? 'deactivation' : 'activation',
+              amount: 0,
+              price: 0,
+              txSignature: signature
+            }
+          });
+
+          return NextResponse.json({ 
+            success: true,
+            signature,
+            message: result.message,
+            status: result.status
+          });
+        } catch (confirmError) {
+          console.error('Transaction confirmation error:', confirmError);
+          return NextResponse.json({ 
+            error: 'Failed to confirm transaction. Please try again later or check your wallet connection.' 
+          }, { status: 500 });
+        }
+      } catch (txError) {
+        console.error('Transaction sending error:', txError);
+        return NextResponse.json({ 
+          error: 'Failed to send transaction to the Solana network. Please check your wallet balance and connection.' 
+        }, { status: 500 });
       }
-    });
-
-    return NextResponse.json({ 
-      success: true,
-      signature,
-      message: result.message,
-      status: result.status
-    });
+    } catch (deserializeError) {
+      console.error('Transaction deserialization error:', deserializeError);
+      return NextResponse.json({ 
+        error: 'Invalid transaction format. Please try again or contact support.' 
+      }, { status: 400 });
+    }
   } catch (error) {
     console.error('Bot confirmation error:', error);
-    return NextResponse.json({ error: 'Fehler bei der Bot-Aktivierungsbestätigung' }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error during bot activation';
+    return NextResponse.json({ 
+      error: `Bot activation failed: ${errorMessage}` 
+    }, { status: 500 });
   }
 } 

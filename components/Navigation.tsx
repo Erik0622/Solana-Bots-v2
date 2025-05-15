@@ -26,8 +26,8 @@ const Navigation: FC = () => {
   return (
     <nav className={`fixed top-0 left-0 right-0 z-50 px-6 py-4 transition-all duration-300 ${isScrolled ? 'bg-dark shadow-lg' : 'bg-transparent'}`}>
       <div className="container mx-auto flex justify-between items-center">
-        <Link href="/" className="text-2xl font-bold text-primary">
-          SolanaBots
+        <Link href="/" className="text-2xl font-bold">
+          <span className="text-white">Sol<span className="text-primary">Bot</span><span className="text-[#FAD02C]">Quants</span></span>
         </Link>
         
         {/* Desktop Navigation */}
@@ -35,18 +35,16 @@ const Navigation: FC = () => {
           <Link href="#bots" className="text-white/80 hover:text-primary transition-colors">
             Bots
           </Link>
-          {connected && (
-            <Link
-              href="/dashboard"
-              className={`text-white/80 hover:text-primary transition-colors ${
-                isActive('/dashboard')
-                  ? 'text-primary border-b-2 border-primary pb-1'
-                  : ''
-              }`}
-            >
-              Dashboard
-            </Link>
-          )}
+          <Link
+            href="/dashboard"
+            className={`text-white/80 hover:text-primary transition-colors ${
+              isActive('/dashboard')
+                ? 'text-primary border-b-2 border-primary pb-1'
+                : ''
+            }`}
+          >
+            Dashboard
+          </Link>
           <Link
             href="/launchpad"
             className={`text-white/80 hover:text-primary transition-colors ${
@@ -97,17 +95,15 @@ const Navigation: FC = () => {
             >
               Bots
             </Link>
-            {connected && (
-              <Link
-                href="/dashboard"
-                className={`text-white/80 hover:text-primary transition-colors py-2 ${
-                  isActive('/dashboard') ? 'text-primary' : ''
-                }`}
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                Dashboard
-              </Link>
-            )}
+            <Link
+              href="/dashboard"
+              className={`text-white/80 hover:text-primary transition-colors py-2 ${
+                isActive('/dashboard') ? 'text-primary' : ''
+              }`}
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              Dashboard
+            </Link>
             <Link
               href="/launchpad"
               className={`text-white/80 hover:text-primary transition-colors py-2 ${

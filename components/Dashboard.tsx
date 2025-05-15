@@ -54,6 +54,8 @@ const Dashboard: FC = () => {
   const [totalProfit, setTotalProfit] = useState({ today: 0, week: 0, month: 0, all: 0 });
   const [devFees, setDevFees] = useState({ total: 0, month: 0 });
   const [walletBalance, setWalletBalance] = useState<number>(0);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Simulate fetching data when wallet is connected
   useEffect(() => {
@@ -74,7 +76,11 @@ const Dashboard: FC = () => {
           setWalletBalance(balance / LAMPORTS_PER_SOL);
         } catch (error) {
           console.error('Error fetching balance:', error);
+          // Setze einen Standardwert, falls der Abruf fehlschlägt
+          setWalletBalance(0);
         }
+      } else {
+        setWalletBalance(0);
       }
     };
 
@@ -157,34 +163,75 @@ const Dashboard: FC = () => {
 
   const toggleBotStatus = async (botId: string) => {
     if (!connected || !publicKey) return;
+    
+    setIsLoading(true);
+    setErrorMessage(null);
 
     try {
-      const response = await fetch('/api/bots/toggle', {
+      // Bestimme die aktuelle Aktion basierend auf dem Bot-Status
+      const currentBot = connectedBots.find(b => b.id === botId);
+      const action = currentBot?.status === 'active' ? 'pause' : 'activate';
+
+      // Erstelle den API-Endpunkt basierend auf der Aktion
+      const endpoint = action === 'activate' ? '/api/bot/activate' : '/api/bot/deactivate';
+
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           botId,
-          wallet: publicKey.toString(),
-          action: connectedBots.find(b => b.id === botId)?.status === 'active' ? 'pause' : 'activate'
+          walletAddress: publicKey.toString(),
+          riskPercentage: 5, // Standardwert, könnte aus einer Einstellung kommen
+          action,
+          botType: currentBot?.name.toLowerCase() || 'volume-tracker' // Fallback auf einen Standardwert
         }),
       });
 
-      if (!response.ok) throw new Error('Failed to toggle bot status');
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to toggle bot status');
+      }
       
-      // Update local state only after successful API call
+      const data = await response.json();
+      
+      // Hier würden wir normalerweise die signierte Transaktion zum Benutzer senden
+      // und nach Bestätigung den Status in der UI aktualisieren
+      
+      // Bestätige die Transaktion über eine zweite API
+      const confirmResponse = await fetch('/api/bot/confirm-activation', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          botId,
+          signedTransaction: data.transaction,
+          action
+        }),
+      });
+      
+      if (!confirmResponse.ok) {
+        const errorData = await confirmResponse.json();
+        throw new Error(errorData.error || 'Failed to confirm bot activation');
+      }
+      
+      // Update local state after successful API call
       setConnectedBots(bots => 
         bots.map(bot => 
           bot.id === botId ? 
-            {...bot, status: bot.status === 'active' ? 'paused' : 'active'} : 
+            {...bot, status: action === 'activate' ? 'active' : 'paused'} : 
             bot
         )
       );
+      
+      setIsLoading(false);
     } catch (error) {
       console.error('Error toggling bot status:', error);
-      // Show error to user
-      alert('Failed to update bot status. Please try again.');
+      // Show specific error to user
+      setErrorMessage(error instanceof Error ? error.message : 'Failed to update bot status. Please try again.');
+      setIsLoading(false);
     }
   };
 
@@ -204,6 +251,19 @@ const Dashboard: FC = () => {
     <section className="py-16 px-6 bg-dark-light min-h-screen">
       <div className="container mx-auto">
         <h2 className="text-3xl font-bold mb-8">Trading Dashboard</h2>
+        
+        {/* Show error message if exists */}
+        {errorMessage && (
+          <div className="bg-red-900/50 text-white p-4 rounded-lg mb-6">
+            <p>{errorMessage}</p>
+            <button 
+              className="text-xs underline mt-2" 
+              onClick={() => setErrorMessage(null)}
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
         
         {/* Summary cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
@@ -433,51 +493,57 @@ const Dashboard: FC = () => {
         )}
         
         {activeTab === 'bots' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {connectedBots.map(bot => (
-              <div key={bot.id} className="bg-dark-lighter p-6 rounded-lg backdrop-blur-sm border border-dark hover:border-primary transition-colors">
-                <div className="flex justify-between items-start mb-4">
-                  <h4 className="text-xl font-bold">{bot.name}</h4>
-                  <div className="flex items-center">
-                    <span className={`inline-block w-3 h-3 rounded-full mr-2 ${bot.status === 'active' ? 'bg-green-500' : 'bg-yellow-500'}`}></span>
-                    <span className={`px-3 py-1 rounded-full text-xs ${bot.status === 'active' ? 'bg-green-500 text-black' : 'bg-yellow-500 text-black'}`}>
-                      {bot.status.charAt(0).toUpperCase() + bot.status.slice(1)}
-                    </span>
-                  </div>
-                </div>
-                
-                <div className="space-y-3 mb-6">
-                  <div className="flex justify-between">
-                    <span className="text-white/60">Trades (30d):</span>
-                    <span>{bot.trades}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-white/60">Today's Return:</span>
-                    <span className="text-primary">+{bot.profitToday.toFixed(2)}%</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-white/60">7-Day Return:</span>
-                    <span className="text-primary">+{bot.profitWeek.toFixed(2)}%</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-white/60">30-Day Return:</span>
-                    <span className="text-primary">+{bot.profitMonth.toFixed(2)}%</span>
-                  </div>
-                </div>
-                
-                <div className="flex gap-2">
-                  <button 
-                    className={`flex-1 py-2 rounded ${bot.status === 'active' ? 'bg-yellow-600 hover:bg-yellow-500' : 'bg-green-600 hover:bg-green-500'} transition-colors text-white`}
-                    onClick={() => toggleBotStatus(bot.id)}
-                  >
-                    {bot.status === 'active' ? 'Pause' : 'Resume'}
-                  </button>
-                  <button className="flex-1 py-2 rounded bg-blue-600 hover:bg-blue-500 transition-colors text-white">
-                    Settings
-                  </button>
-                </div>
+          <div>
+            <div className="overflow-x-auto -mx-6 px-6">
+              <table className="w-full text-left min-w-[800px]">
+                <thead>
+                  <tr className="bg-dark-lighter">
+                    <th className="p-3 sm:p-4 rounded-tl-lg">Bot Name</th>
+                    <th className="p-3 sm:p-4">Status</th>
+                    <th className="p-3 sm:p-4">Today's Profit</th>
+                    <th className="p-3 sm:p-4">Weekly Profit</th>
+                    <th className="p-3 sm:p-4">Monthly Profit</th>
+                    <th className="p-3 sm:p-4">Total Trades</th>
+                    <th className="p-3 sm:p-4 rounded-tr-lg">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {connectedBots.map(bot => (
+                    <tr key={bot.id} className="border-b border-dark-lighter hover:bg-dark transition-colors">
+                      <td className="p-3 sm:p-4">{bot.name}</td>
+                      <td className="p-3 sm:p-4">
+                        <span className={`px-2 py-1 rounded-full text-xs ${bot.status === 'active' ? 'bg-green-900/20 text-green-500' : 'bg-yellow-900/20 text-yellow-500'}`}>
+                          {bot.status === 'active' ? 'Active' : 'Paused'}
+                        </span>
+                      </td>
+                      <td className="p-3 sm:p-4"><span className="text-primary">+{bot.profitToday}%</span></td>
+                      <td className="p-3 sm:p-4"><span className="text-primary">+{bot.profitWeek}%</span></td>
+                      <td className="p-3 sm:p-4"><span className="text-primary">+{bot.profitMonth}%</span></td>
+                      <td className="p-3 sm:p-4">{bot.trades}</td>
+                      <td className="p-3 sm:p-4">
+                        <button
+                          className={`px-3 py-1 rounded-md text-sm ${
+                            bot.status === 'active' 
+                              ? 'bg-yellow-600 hover:bg-yellow-700' 
+                              : 'bg-green-600 hover:bg-green-700'
+                          } transition-colors ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          onClick={() => toggleBotStatus(bot.id)}
+                          disabled={isLoading}
+                        >
+                          {isLoading ? 'Processing...' : bot.status === 'active' ? 'Pause' : 'Resume'}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            
+            {connectedBots.length === 0 && (
+              <div className="text-center py-8">
+                <p className="text-white/60">No bots connected yet. Go to the Launchpad to set up your first bot.</p>
               </div>
-            ))}
+            )}
           </div>
         )}
       </div>
