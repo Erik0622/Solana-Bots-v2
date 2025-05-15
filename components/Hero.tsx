@@ -3,6 +3,7 @@
 import React, { FC } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
+import Link from 'next/link';
 
 const Hero: FC = () => {
   const { connected } = useWallet();
@@ -24,29 +25,25 @@ const Hero: FC = () => {
               <div className="md:mr-4">
                 <WalletMultiButton className="btn-primary text-lg px-8 py-3" />
               </div>
-              <a href="#bots" className="btn-secondary text-lg px-8 py-3">
+              <Link href="#bots" className="btn-secondary text-lg px-8 py-3">
                 Discover Bots
-              </a>
+              </Link>
             </>
           ) : (
-            <a href="#bots" className="btn-primary text-lg px-8 py-3">
-              Launch My Bots
-            </a>
+            <Link href="/dashboard" className="btn-primary text-lg px-8 py-3">
+              Dashboard
+            </Link>
           )}
         </div>
         
-        <div className="mt-16 flex flex-wrap justify-center gap-8">
-          <div className="stat-card w-60">
-            <p className="text-4xl font-bold text-primary">+615%</p>
-            <p className="text-white/60">Average Annual Return</p>
+        <div className="mt-16 grid grid-cols-2 md:flex md:flex-wrap justify-center gap-4 md:gap-8">
+          <div className="stat-card col-span-1">
+            <p className="text-3xl md:text-4xl font-bold text-primary">+615%</p>
+            <p className="text-white/60 text-sm md:text-base">Average Annual Return</p>
           </div>
-          <div className="stat-card w-60">
-            <p className="text-4xl font-bold text-primary">+37%</p>
-            <p className="text-white/60">Last 30 Days Performance</p>
-          </div>
-          <div className="stat-card w-60">
-            <p className="text-4xl font-bold text-primary">1,300+</p>
-            <p className="text-white/60">Active Users</p>
+          <div className="stat-card col-span-1">
+            <p className="text-3xl md:text-4xl font-bold text-primary">+37%</p>
+            <p className="text-white/60 text-sm md:text-base">Last 30 Days Performance</p>
           </div>
         </div>
       </div>
