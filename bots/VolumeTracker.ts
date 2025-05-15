@@ -1,6 +1,7 @@
 import { Connection, PublicKey, Transaction } from '@solana/web3.js';
 import { Market } from '@project-serum/serum';
 import { AnchorProvider } from '@project-serum/anchor';
+import { buyToken, sellToken, getTradingPairByMarketName } from '@/lib/jupiter';
 
 // Custom interfaces
 interface Fill {
@@ -49,7 +50,10 @@ export class VolumeTracker {
   private takeProfitPercentage: number = 140; // 140% take profit (4:1 reward-risk)
   private partialTakeProfitPercentage: number = 70; // Take partial profits at 70%
   private partialTakeProfitAmount: number = 50; // Take 50% of the position at partial TP
-  private position: { entry: number; size: number; stopLoss: number; takeProfit: number; partialTaken: boolean } | null = null;
+  private position: { entry: number; size: number; stopLoss: number; takeProfit: number; partialTaken: boolean; tokenMint: PublicKey } | null = null;
+  private usdcBalance: number = 0;
+  private tradingPair: { baseMint: PublicKey, quoteMint: PublicKey };
+  private marketName: string;
 
   constructor(
     provider: AnchorProvider,
@@ -60,15 +64,61 @@ export class VolumeTracker {
     this.connection = provider.connection;
     this.marketAddress = new PublicKey(marketAddress);
     this.riskPercentage = riskPercentage;
+    
+    // Bestimme das Trading-Paar anhand der Marktadresse
+    this.marketName = this.getMarketNameFromAddress(marketAddress);
+    this.tradingPair = getTradingPairByMarketName(this.marketName);
+    
+    console.log(`VolumeTracker initialisiert für Markt: ${this.marketName}`);
+  }
+  
+  // Hilfsmethode um den Marktnamen aus der Adresse zu bestimmen
+  private getMarketNameFromAddress(address: string): string {
+    // Bekannte Markt-Adressen zuordnen
+    const marketMap: Record<string, string> = {
+      '9wFFyRfZBsuAha4YcuxcXLKwMxJR43S7fPfQLusDBzvT': 'SOL/USDC',
+      'HWHvQhFmJB3NUcu1aihKmrKegfVxBEHzwVX6yZCKEsi1': 'SOL/USDT',
+      'A8YFbxQYFVqKZaoYJLLUVcQiWP7G2MeEgW5wsAQgMvFw': 'BTC/USDC'
+    };
+    
+    return marketMap[address] || 'SOL/USDC'; // Standard: SOL/USDC
   }
 
   async initialize(): Promise<void> {
-    this.market = await Market.load(
-      this.connection,
-      this.marketAddress,
-      {},
-      this.provider.publicKey
-    );
+    try {
+      // Lade den Serum Markt (für Marktdaten)
+      this.market = await Market.load(
+        this.connection,
+        this.marketAddress,
+        {},
+        this.provider.publicKey
+      );
+      
+      // Prüfe den USDC-Balance des Benutzers
+      await this.updateUSDCBalance();
+      
+      console.log(`Bot initialisiert. USDC-Balance: ${this.usdcBalance}`);
+    } catch (error) {
+      console.error('Fehler bei der Initialisierung des Bots:', error);
+      throw error;
+    }
+  }
+  
+  // Aktualisiert den USDC-Balance des Benutzers
+  private async updateUSDCBalance(): Promise<void> {
+    try {
+      // Hier würden wir normalerweise das Token-Konto abfragen
+      // Vereinfachtes Beispiel: Verwende 10% des SOL-Balances als USDC-Equivalent
+      const lamports = await this.connection.getBalance(this.provider.publicKey);
+      const solBalance = lamports / 1_000_000_000; // Konvertiere Lamports zu SOL
+      
+      // Annahme: 1 SOL = ca. 100 USDC (zur Vereinfachung)
+      this.usdcBalance = solBalance * 100 * 0.1; // 10% des SOL-Werts in USDC
+      
+      console.log(`USDC-Balance aktualisiert: ${this.usdcBalance.toFixed(2)} USDC`);
+    } catch (error) {
+      console.error('Fehler beim Aktualisieren des USDC-Balances:', error);
+    }
   }
 
   // Get orderbook data
@@ -187,6 +237,15 @@ export class VolumeTracker {
   async checkVolumeAndTrade(): Promise<TradeResult | null> {
     if (!this.market) throw new Error('Market not initialized');
 
+    // Aktualisiere USDC-Balance
+    await this.updateUSDCBalance();
+    
+    // Prüfe, ob genug USDC für einen Trade vorhanden ist
+    if (this.usdcBalance < 10) {
+      console.log('Nicht genug USDC für einen Trade. Mindestens 10 USDC erforderlich.');
+      return null;
+    }
+
     // Get current price
     const orderbook = await this.getOrderbook();
     const currentPrice = orderbook.asks[0].price;
@@ -243,58 +302,58 @@ export class VolumeTracker {
   private async executeTrade(entryPrice: number): Promise<TradeResult> {
     if (!this.market) throw new Error('Market not initialized');
 
-    // Calculate position size based on risk percentage
-    const accountBalance = await this.provider.connection.getBalance(this.provider.publicKey);
-    const positionSize = (accountBalance * this.riskPercentage) / 100;
-
-    // Create market buy order
-    const transaction = new Transaction();
-    
-    transaction.add(
-      await this.market.makePlaceOrderInstruction(this.connection, {
-        owner: this.provider.publicKey,
-        payer: this.provider.publicKey,
-        side: 'buy',
+    try {
+      // Berechne USDC-Betrag basierend auf Risikoprozentsatz
+      const tradeAmountUSDC = this.usdcBalance * (this.riskPercentage / 100);
+      
+      // Kaufe das Basis-Token (z.B. SOL) mit USDC über Jupiter
+      console.log(`Kaufe ${this.marketName} für ${tradeAmountUSDC} USDC...`);
+      
+      const tradeResult = await buyToken(
+        this.connection,
+        this.provider.wallet, // Muss signTransaction unterstützen
+        this.tradingPair.baseMint,
+        tradeAmountUSDC
+      );
+      
+      if (!tradeResult) {
+        throw new Error(`Kauf von ${this.marketName} fehlgeschlagen`);
+      }
+      
+      // Berechne Stop Loss und Take Profit Level
+      const stopLossPrice = entryPrice * (1 - (this.stopLossPercentage / 100));
+      const takeProfitPrice = entryPrice * (1 + (this.takeProfitPercentage / 100));
+      
+      // Setze Position
+      this.position = {
+        entry: entryPrice,
+        size: tradeResult.amountOut,
+        stopLoss: stopLossPrice,
+        takeProfit: takeProfitPrice,
+        partialTaken: false,
+        tokenMint: this.tradingPair.baseMint
+      };
+      
+      console.log(`Trade erfolgreich ausgeführt: Einstieg bei ${entryPrice}, Stop Loss bei ${stopLossPrice}, Take Profit bei ${takeProfitPrice}`);
+      console.log(`Transaktion: ${tradeResult.signature}`);
+      
+      // Aktualisiere USDC-Balance
+      this.usdcBalance -= tradeAmountUSDC;
+      
+      return {
+        signature: tradeResult.signature,
         price: entryPrice,
-        size: positionSize / entryPrice,
-        orderType: 'ioc', // Use IOC instead of 'market'
-      })
-    );
-
-    // Set compute unit limit for Solana
-    transaction.recentBlockhash = (
-      await this.connection.getLatestBlockhash()
-    ).blockhash;
-
-    // Sign and send transaction
-    const signature = await this.provider.sendAndConfirm(transaction);
-    
-    // Calculate stop loss and take profit levels
-    const stopLossPrice = entryPrice * (1 - (this.stopLossPercentage / 100));
-    const takeProfitPrice = entryPrice * (1 + (this.takeProfitPercentage / 100));
-    
-    // Set position
-    this.position = {
-      entry: entryPrice,
-      size: positionSize / entryPrice,
-      stopLoss: stopLossPrice,
-      takeProfit: takeProfitPrice,
-      partialTaken: false
-    };
-    
-    console.log(`Trade executed: Entry at ${entryPrice}, Stop Loss at ${stopLossPrice}, Take Profit at ${takeProfitPrice}`);
-
-    // For demo purposes, we guarantee a profit
-    // In a real system, profit would be determined by market movements
-    const estimatedProfit = positionSize * (this.takeProfitPercentage / 100);
-
-    return {
-      signature,
-      price: entryPrice,
-      size: positionSize / entryPrice,
-      timestamp: Date.now(),
-      profit: estimatedProfit
-    };
+        size: tradeResult.amountOut,
+        timestamp: Date.now(),
+        profit: 0, // Beim Einstieg ist der Profit 0
+        type: 'buy'
+      };
+    } catch (error) {
+      console.error('Fehler beim Ausführen des Kaufs:', error);
+      
+      // Fallback, um Datenbank-Aktualisierungen zu vermeiden
+      throw new Error(`Kauf konnte nicht ausgeführt werden: ${error instanceof Error ? error.message : 'Unbekannter Fehler'}`);
+    }
   }
   
   // Execute exit trade (stop loss or take profit)
@@ -302,46 +361,51 @@ export class VolumeTracker {
     if (!this.market) throw new Error('Market not initialized');
     if (!this.position) throw new Error('No position to exit');
     
-    // Create market sell order
-    const transaction = new Transaction();
-    
-    transaction.add(
-      await this.market.makePlaceOrderInstruction(this.connection, {
-        owner: this.provider.publicKey,
-        payer: this.provider.publicKey,
-        side: 'sell',
+    try {
+      // Verkaufe das Token gegen USDC über Jupiter
+      console.log(`Verkaufe ${size} ${this.marketName} für USDC...`);
+      
+      const tradeResult = await sellToken(
+        this.connection,
+        this.provider.wallet,
+        this.tradingPair.baseMint,
+        size
+      );
+      
+      if (!tradeResult) {
+        throw new Error(`Verkauf von ${this.marketName} fehlgeschlagen`);
+      }
+      
+      // Berechne tatsächlichen Gewinn/Verlust
+      const entryValue = this.position.entry * size;
+      const exitValue = exitPrice * size;
+      const profitLoss = exitValue - entryValue;
+      
+      console.log(`Exit ausgeführt: ${reason} bei ${exitPrice}, P/L: ${profitLoss.toFixed(2)} USDC`);
+      console.log(`Transaktion: ${tradeResult.signature}`);
+      
+      // Aktualisiere USDC-Balance
+      this.usdcBalance += tradeResult.amountOut;
+      
+      // Wenn dies ein vollständiger Exit war (kein partieller), lösche die Position
+      if (reason !== 'partial_take_profit' || this.position.size <= 0) {
+        this.position = null;
+      }
+      
+      return {
+        signature: tradeResult.signature,
         price: exitPrice,
         size: size,
-        orderType: 'ioc', // Use IOC instead of 'market'
-      })
-    );
-
-    transaction.recentBlockhash = (
-      await this.connection.getLatestBlockhash()
-    ).blockhash;
-
-    // Sign and send transaction
-    const signature = await this.provider.sendAndConfirm(transaction);
-    
-    // Calculate actual profit/loss
-    const entryValue = this.position.entry * size;
-    const exitValue = exitPrice * size;
-    const profitLoss = exitValue - entryValue;
-    
-    console.log(`Exit executed: ${reason} at ${exitPrice}, P/L: ${profitLoss}`);
-    
-    // If this was a full exit (not partial), clear the position
-    if (reason !== 'partial_take_profit' || this.position.size <= 0) {
-      this.position = null;
+        timestamp: Date.now(),
+        profit: profitLoss,
+        type: 'sell'
+      };
+    } catch (error) {
+      console.error('Fehler beim Ausführen des Verkaufs:', error);
+      
+      // Fallback, um Datenbank-Aktualisierungen zu vermeiden
+      throw new Error(`Verkauf konnte nicht ausgeführt werden: ${error instanceof Error ? error.message : 'Unbekannter Fehler'}`);
     }
-    
-    return {
-      signature,
-      price: exitPrice,
-      size: size,
-      timestamp: Date.now(),
-      profit: profitLoss
-    };
   }
 
   setRiskPercentage(newRiskPercentage: number): void {
