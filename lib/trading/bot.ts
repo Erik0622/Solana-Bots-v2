@@ -1,5 +1,5 @@
 import { Connection, PublicKey, Transaction } from '@solana/web3.js';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Bot as PrismaBot } from '@prisma/client';
 import * as anchor from '@project-serum/anchor';
 import { AnchorProvider } from '@project-serum/anchor';
 import { VolumeTracker } from '@/bots/VolumeTracker';
@@ -40,6 +40,16 @@ export interface BotConfig {
   minMarketCap?: number;
   requireLockedLiquidity?: boolean;
   riskPercentage?: number;
+}
+
+// Interface für Default-Bot wenn Datenbank nicht verfügbar ist
+interface DefaultBot {
+  id: string;
+  isActive: boolean;
+  walletAddress: string;
+  strategyType: string;
+  riskPercentage: number;
+  name: string;
 }
 
 // Initialisiere einen Bot mit der richtigen Strategie und Konfiguration
@@ -86,7 +96,7 @@ export function registerWalletForBot(botId: string, wallet: any) {
 export async function startTradingBot(botId: string, config: BotConfig = {}) {
   try {
     // Hole Bot-Daten aus der Datenbank
-    let bot;
+    let bot: PrismaBot | DefaultBot | null = null;
     try {
       bot = await prisma.bot.findUnique({
         where: { id: botId }
