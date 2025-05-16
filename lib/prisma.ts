@@ -33,6 +33,10 @@ try {
       log: ['error', 'warn'],
       errorFormat: 'minimal',
     });
+    
+    // In der Produktion Mock-Mode nur aktivieren, wenn explizit gesetzt
+    global.isMockMode = process.env.MOCK_MODE === 'true' || false;
+    console.log("Prisma Client in Produktion initialisiert. Mock-Mode:", global.isMockMode);
   } else {
     // In der Entwicklung um wiederholte Instanziierung des PrismaClient zu vermeiden
     if (!global.prisma) {
@@ -53,19 +57,25 @@ try {
   }
 } catch (e) {
   console.error("Fehler bei der Initialisierung des Prisma Clients:", e);
-  console.warn("Verwende Mock-Daten-Modus, da die Datenbankverbindung fehlgeschlagen ist");
   
-  // Aktiviere Mock-Mode bei Verbindungsproblemen
-  global.isMockMode = true;
-  // Erstelle trotzdem einen PrismaClient, damit die Anwendung nicht abstürzt
-  prisma = new PrismaClient({
-    datasources: {
-      db: {
-        // Versuche Fallback-URL zu verwenden
-        url: fallbackUrl,
+  if (process.env.NODE_ENV === 'production') {
+    console.error("Datenbankfehler in Produktionsumgebung - keine Fallback auf Mock-Modus, um echtes Trading zu schützen");
+    throw new Error("Keine Datenbankverbindung in der Produktionsumgebung möglich");
+  } else {
+    console.warn("Verwende Mock-Daten-Modus, da die Datenbankverbindung fehlgeschlagen ist");
+    
+    // Aktiviere Mock-Mode bei Verbindungsproblemen (nur in Entwicklung)
+    global.isMockMode = true;
+    // Erstelle trotzdem einen PrismaClient, damit die Anwendung nicht abstürzt
+    prisma = new PrismaClient({
+      datasources: {
+        db: {
+          // Versuche Fallback-URL zu verwenden
+          url: fallbackUrl,
+        },
       },
-    },
-  });
+    });
+  }
 }
 
 // Exportiere auch die Information, ob wir im Mock-Modus sind
