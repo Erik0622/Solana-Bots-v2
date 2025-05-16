@@ -64,17 +64,15 @@ const Dashboard: FC = () => {
       fetchConnectedBots();
       
       const botsListInterval = setInterval(fetchConnectedBots, 10000);
-      const balanceInterval = setInterval(fetchBalance, 15000);
 
       return () => {
         clearInterval(botsListInterval);
-        clearInterval(balanceInterval);
       };
     }
   }, [connected, publicKey, timeframe]);
 
   useEffect(() => {
-    const fetchBalance = async () => {
+    const localFetchBalance = async () => {
       console.log("fetchBalance called. Connected:", connected, "PublicKey:", publicKey?.toBase58(), "Connection object available:", !!connection);
       if (connected && publicKey && connection) {
         try {
@@ -94,10 +92,11 @@ const Dashboard: FC = () => {
       }
     };
 
-    fetchBalance();
-    const intervalId = setInterval(fetchBalance, 10000);
-
-    return () => clearInterval(intervalId);
+    if (connected && publicKey && connection) {
+        localFetchBalance();
+        const balanceIntervalId = setInterval(localFetchBalance, 12000);
+        return () => clearInterval(balanceIntervalId);
+    }
   }, [connected, publicKey, connection]);
 
   const fetchPositions = async () => {
