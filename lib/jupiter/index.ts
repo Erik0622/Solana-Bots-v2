@@ -1,6 +1,4 @@
 import { Connection, PublicKey, Transaction, Commitment, VersionedTransaction, AddressLookupTableAccount } from '@solana/web3.js';
-import { Jupiter, SwapMode } from '@jup-ag/api';
-import { Wallet } from '@project-serum/anchor';
 import fetch from 'cross-fetch';
 
 // Bekannte Token-Informationen
