@@ -23,6 +23,9 @@ const programId = new PublicKey(BOT_PROGRAM_ID);
 // Bot-Instanzen
 const botInstances = new Map();
 
+// Speichere die Bot-Status auch über Navigationen hinweg (persistente Speicherung)
+let persistentBotStatuses = new Map();
+
 // Speichere die Wallet-Provider für jeden Bot
 const walletProviders = new Map();
 
@@ -93,6 +96,11 @@ export function registerWalletForBot(botId: string, wallet: any) {
   console.log(`Wallet für Bot ${botId} registriert`);
 }
 
+// Prüfe, ob ein Bot aktiv ist (auch über Navigation hinweg)
+export function isBotActive(botId: string): boolean {
+  return persistentBotStatuses.get(botId) === true;
+}
+
 export async function startTradingBot(botId: string, config: BotConfig = {}) {
   try {
     // Hole Bot-Daten aus der Datenbank
@@ -154,100 +162,33 @@ export async function startTradingBot(botId: string, config: BotConfig = {}) {
       ...config // Übernimm alle weiteren Konfigurationsparameter
     };
     
-    const botInstance = createBot(
-      bot.strategyType,
-      provider,
-      marketAddress,
-      botConfig
-    );
-    
-    await botInstance.initialize();
-    
-    // Speichere Bot-Instanz für spätere Referenz
-    botInstances.set(botId, botInstance);
-
-    console.log(`Bot ${botId} (${bot.strategyType}) gestartet mit Risiko: ${bot.riskPercentage}%`);
-    if (config.useNewTokensOnly) {
-      console.log(`Modus: Nur neue Token unter ${config.maxTokenAgeHours || 24} Stunden`);
-    }
-
-    // Starte Trading-Loop
-    const intervalId = setInterval(async () => {
-      try {
-        // Prüfe ob Bot noch aktiv ist
-        let isActive = true;
-        try {
-          const updatedBot = await prisma.bot.findUnique({
-            where: { id: botId }
-          });
-          isActive = updatedBot?.isActive || false;
-        } catch (dbError) {
-          console.warn('Datenbankfehler bei Aktivitätsprüfung, verwende Cache:', dbError);
-          isActive = botInstances.has(botId);
-        }
-
-        if (!isActive) {
-          console.log(`Bot ${botId} wurde deaktiviert, stoppe Trading-Loop`);
-          clearInterval(intervalId);
-          botInstances.delete(botId);
-          return;
-        }
-
-        // Stelle sicher, dass bot nicht null ist
-        if (!bot) {
-          console.error(`Bot ${botId} ist null, überspringe Trading-Iteration`);
-          return;
-        }
-
-        // Führe Bot-Strategie aus
-        let tradeResult;
-        switch (bot.strategyType) {
-          case BotType.VOLUME_TRACKER:
-            tradeResult = await (botInstance as VolumeTracker).checkVolumeAndTrade();
-            break;
-          case BotType.TREND_SURFER:
-            tradeResult = await (botInstance as MomentumBot).checkMomentumAndTrade();
-            break;
-          case BotType.DIP_HUNTER:
-            tradeResult = await (botInstance as DipHunter).findAndTradeDip();
-            break;
-        }
-
-        // Verarbeite Trade-Ergebnis, wenn vorhanden
-        if (tradeResult) {
-          try {
-            await prisma.trade.create({
-              data: {
-                botId,
-                type: tradeResult.type || 'auto',
-                amount: tradeResult.size,
-                price: tradeResult.price,
-                profit: tradeResult.profit,
-                txSignature: tradeResult.signature
-              }
-            });
-
-            // Aktualisiere Bot-Statistiken
-            await prisma.bot.update({
-              where: { id: botId },
-              data: {
-                totalTrades: { increment: 1 },
-                successfulTrades: tradeResult.profit > 0 ? { increment: 1 } : undefined,
-                totalProfit: { increment: tradeResult.profit }
-              }
-            });
-          } catch (dbError) {
-            console.error('Datenbankfehler beim Speichern des Trades:', dbError);
-            // Trotzdem den Trade loggen
-            console.log(`Bot ${botId} hat einen Trade ausgeführt: ${JSON.stringify(tradeResult)}`);
-          }
-
-          console.log(`Bot ${botId} hat einen Trade ausgeführt: ${JSON.stringify(tradeResult)}`);
-        }
-      } catch (error) {
-        console.error(`Fehler beim Trading mit Bot ${botId}:`, error);
+    // Prüfe, ob bereits eine Instanz existiert, um Doppelstarts zu vermeiden
+    if (botInstances.has(botId)) {
+      console.log(`Bot ${botId} läuft bereits, keine neue Instanz erstellt`);
+    } else {
+      const botInstance = createBot(
+        bot.strategyType,
+        provider,
+        marketAddress,
+        botConfig
+      );
+      
+      await botInstance.initialize();
+      
+      // Speichere Bot-Instanz für spätere Referenz
+      botInstances.set(botId, botInstance);
+  
+      console.log(`Bot ${botId} (${bot.strategyType}) gestartet mit Risiko: ${bot.riskPercentage}%`);
+      if (config.useNewTokensOnly) {
+        console.log(`Modus: Nur neue Token unter ${config.maxTokenAgeHours || 24} Stunden`);
       }
-    }, 30000); // Prüfe alle 30 Sekunden
+  
+      // Markiere den Bot als aktiv im persistenten Speicher
+      persistentBotStatuses.set(botId, true);
+  
+      // Starte Trading-Loop nur, wenn noch keiner läuft
+      startTradingLoop(botId, bot);
+    }
 
     return {
       botId,
@@ -260,6 +201,104 @@ export async function startTradingBot(botId: string, config: BotConfig = {}) {
   }
 }
 
+// Separate Funktion für den Trading-Loop, um Duplikate zu vermeiden
+function startTradingLoop(botId: string, bot: PrismaBot | DefaultBot) {
+  // Eindeutige ID für diesen Trading-Loop, um ihn identifizieren zu können
+  const loopId = `trading-loop-${botId}-${Date.now()}`;
+  console.log(`Trading Loop ${loopId} gestartet für Bot ${botId}`);
+  
+  // Starte Trading-Loop
+  const intervalId = setInterval(async () => {
+    try {
+      // Prüfe ob Bot noch aktiv ist
+      let isActive = persistentBotStatuses.get(botId) === true;
+      
+      try {
+        const updatedBot = await prisma.bot.findUnique({
+          where: { id: botId }
+        });
+        
+        // Update auch den persistenten Status basierend auf der Datenbank
+        isActive = updatedBot?.isActive || false;
+        persistentBotStatuses.set(botId, isActive);
+        
+      } catch (dbError) {
+        console.warn('Datenbankfehler bei Aktivitätsprüfung, verwende Cache:', dbError);
+        // Behalte den vorhandenen Status bei, falls wir nicht auf die DB zugreifen können
+      }
+
+      if (!isActive) {
+        console.log(`Bot ${botId} wurde deaktiviert, stoppe Trading-Loop ${loopId}`);
+        clearInterval(intervalId);
+        return;
+      }
+
+      // Hole Bot-Instanz
+      const botInstance = botInstances.get(botId);
+      if (!botInstance) {
+        console.error(`Bot-Instanz ${botId} nicht gefunden, stoppe Trading-Loop ${loopId}`);
+        clearInterval(intervalId);
+        persistentBotStatuses.set(botId, false);
+        return;
+      }
+
+      // Stelle sicher, dass bot nicht null ist
+      if (!bot) {
+        console.error(`Bot ${botId} ist null, überspringe Trading-Iteration`);
+        return;
+      }
+
+      // Führe Bot-Strategie aus
+      let tradeResult;
+      switch (bot.strategyType) {
+        case BotType.VOLUME_TRACKER:
+          tradeResult = await (botInstance as VolumeTracker).checkVolumeAndTrade();
+          break;
+        case BotType.TREND_SURFER:
+          tradeResult = await (botInstance as MomentumBot).checkMomentumAndTrade();
+          break;
+        case BotType.DIP_HUNTER:
+          tradeResult = await (botInstance as DipHunter).findAndTradeDip();
+          break;
+      }
+
+      // Verarbeite Trade-Ergebnis, wenn vorhanden
+      if (tradeResult) {
+        try {
+          await prisma.trade.create({
+            data: {
+              botId,
+              type: tradeResult.type || 'auto',
+              amount: tradeResult.size,
+              price: tradeResult.price,
+              profit: tradeResult.profit,
+              txSignature: tradeResult.signature
+            }
+          });
+
+          // Aktualisiere Bot-Statistiken
+          await prisma.bot.update({
+            where: { id: botId },
+            data: {
+              totalTrades: { increment: 1 },
+              successfulTrades: tradeResult.profit > 0 ? { increment: 1 } : undefined,
+              totalProfit: { increment: tradeResult.profit }
+            }
+          });
+        } catch (dbError) {
+          console.error('Datenbankfehler beim Speichern des Trades:', dbError);
+          // Trotzdem den Trade loggen
+          console.log(`Bot ${botId} hat einen Trade ausgeführt: ${JSON.stringify(tradeResult)}`);
+        }
+
+        console.log(`Bot ${botId} hat einen Trade ausgeführt: ${JSON.stringify(tradeResult)}`);
+      }
+    } catch (error) {
+      console.error(`Fehler beim Trading mit Bot ${botId}:`, error);
+    }
+  }, 30000); // Prüfe alle 30 Sekunden
+}
+
 export async function stopTradingBot(botId: string) {
   const botInstance = botInstances.get(botId);
   
@@ -268,6 +307,9 @@ export async function stopTradingBot(botId: string) {
     
     // Entferne auch die registrierte Wallet
     walletProviders.delete(botId);
+    
+    // Setze persistenten Bot-Status
+    persistentBotStatuses.set(botId, false);
     
     // Aktualisiere Bot-Status in der Datenbank
     try {
