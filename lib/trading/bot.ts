@@ -193,6 +193,12 @@ export async function startTradingBot(botId: string, config: BotConfig = {}) {
           return;
         }
 
+        // Stelle sicher, dass bot nicht null ist
+        if (!bot) {
+          console.error(`Bot ${botId} ist null, überspringe Trading-Iteration`);
+          return;
+        }
+
         // Führe Bot-Strategie aus
         let tradeResult;
         switch (bot.strategyType) {
