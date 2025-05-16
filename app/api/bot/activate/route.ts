@@ -3,6 +3,7 @@ import { Connection, PublicKey, Transaction } from '@solana/web3.js';
 import * as anchor from '@project-serum/anchor';
 import { BotType } from '@/lib/trading/bot';
 import prisma, { getMockModeStatus } from '@/lib/prisma';
+import { Bot as PrismaBot } from '@prisma/client';
 
 // Alchemy RPC URL für Solana Mainnet
 const SOLANA_RPC_URL = process.env.SOLANA_RPC_URL || 'https://solana-mainnet.g.alchemy.com/v2/ajXi9mI9_OF6a0Nfy6PZ-05JT29nTxFm';
@@ -19,6 +20,16 @@ interface TradingBotIdl {
   name: string;
   instructions: any[];
   [key: string]: any;
+}
+
+// Interface für Default/Mock-Bot wenn Datenbank nicht verfügbar ist
+interface DefaultBot {
+  id: string;
+  name: string;
+  walletAddress: string;
+  riskPercentage: number;
+  strategyType: string;
+  isActive: boolean;
 }
 
 // Bot-Programm IDL importieren - mit try-catch um Fehler abzufangen
@@ -123,7 +134,7 @@ export async function POST(request: Request) {
     }
 
     // Versuche Bot aus der Datenbank zu holen oder erstelle einen neuen
-    let bot;
+    let bot: PrismaBot | DefaultBot | null = null;
     try {
       bot = await prisma.bot.findUnique({
         where: { id: botId }

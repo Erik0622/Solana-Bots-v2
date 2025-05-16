@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { Connection, Transaction } from '@solana/web3.js';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Bot as PrismaBot } from '@prisma/client';
 import { startTradingBot, stopTradingBot } from '@/lib/trading/bot';
 import prisma, { getMockModeStatus } from '@/lib/prisma';
 
@@ -43,7 +43,7 @@ export async function POST(request: Request) {
     }
 
     // Außerhalb des Mock-Modus: Versuche, den Bot aus der Datenbank zu holen
-    let bot;
+    let bot: PrismaBot | null = null;
     try {
       bot = await prisma.bot.findUnique({
         where: { id: botId }
