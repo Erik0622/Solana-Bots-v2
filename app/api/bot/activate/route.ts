@@ -74,6 +74,8 @@ try {
 
 const programId = new PublicKey(BOT_PROGRAM_ID);
 
+export const dynamic = 'force-dynamic'; // Diese Route dynamisch machen
+
 export async function POST(request: Request) {
   try {
     const { botId, walletAddress, riskPercentage, action, botType } = await request.json();

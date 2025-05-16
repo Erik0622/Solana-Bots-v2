@@ -11,6 +11,8 @@ const connection = new Connection(SOLANA_RPC_URL, {
   commitment: 'confirmed'
 });
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: Request) {
   try {
     const { botId, signedTransaction, action, isMockMode: requestMockMode } = await request.json();

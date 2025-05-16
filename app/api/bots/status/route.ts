@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 
+export const dynamic = 'force-dynamic'; // Diese Route dynamisch machen
+
 // Diese Route gibt den aktuellen Status des Bots zurück
 export async function GET(request: Request) {
   try {
