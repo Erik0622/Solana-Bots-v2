@@ -4,12 +4,17 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 export async function GET(request: Request) {
+  let apiResponse;
   try {
     const { searchParams } = new URL(request.url);
     const wallet = searchParams.get('wallet');
 
     if (!wallet) {
-      return NextResponse.json({ error: 'Wallet-Adresse erforderlich' }, { status: 400 });
+      apiResponse = NextResponse.json({ error: 'Wallet-Adresse erforderlich' }, { status: 400 });
+      apiResponse.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      apiResponse.headers.set('Pragma', 'no-cache');
+      apiResponse.headers.set('Expires', '0');
+      return apiResponse;
     }
 
     // Standard-Bots, die zurückgegeben werden, wenn keine gefunden wurden oder ein Fehler auftritt
@@ -62,58 +67,63 @@ export async function GET(request: Request) {
       // Wenn keine Bots gefunden wurden, gib die Standard-Bots zurück
       if (bots.length === 0) {
         console.log(`Keine Bots für Wallet ${wallet} gefunden, gebe Standard-Bots zurück`);
-        return NextResponse.json(defaultBots);
+        apiResponse = NextResponse.json(defaultBots);
+      } else {
+        // Berechne Statistiken für jeden Bot
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const weekAgo = new Date(now);
+        weekAgo.setDate(now.getDate() - 7);
+        const monthAgo = new Date(now);
+        monthAgo.setDate(now.getDate() - 30);
+  
+        const formattedBots = bots.map(bot => {
+          try {
+            // Berechne Profits für verschiedene Zeiträume
+            const todayProfit = calculateProfitForPeriod(bot.trades || [], today);
+            const weekProfit = calculateProfitForPeriod(bot.trades || [], weekAgo);
+            const monthProfit = calculateProfitForPeriod(bot.trades || [], monthAgo);
+  
+            return {
+              id: bot.id,
+              name: bot.name,
+              status: bot.isActive ? 'active' : 'paused',
+              trades: bot.totalTrades || 0,
+              profitToday: todayProfit,
+              profitWeek: weekProfit,
+              profitMonth: monthProfit
+            };
+          } catch (botError) {
+            console.error(`Fehler bei Bot ${bot.id}:`, botError);
+            // Im Fehlerfall Standard-Bot-Daten zurückgeben
+            return {
+              id: bot.id,
+              name: bot.name || 'Unbekannter Bot',
+              status: bot.isActive ? 'active' : 'paused',
+              trades: bot.totalTrades || 0,
+              profitToday: 0,
+              profitWeek: 0,
+              profitMonth: 0
+            };
+          }
+        });
+  
+        apiResponse = NextResponse.json(formattedBots);
       }
-
-      // Berechne Statistiken für jeden Bot
-      const now = new Date();
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const weekAgo = new Date(now);
-      weekAgo.setDate(now.getDate() - 7);
-      const monthAgo = new Date(now);
-      monthAgo.setDate(now.getDate() - 30);
-
-      const formattedBots = bots.map(bot => {
-        try {
-          // Berechne Profits für verschiedene Zeiträume
-          const todayProfit = calculateProfitForPeriod(bot.trades || [], today);
-          const weekProfit = calculateProfitForPeriod(bot.trades || [], weekAgo);
-          const monthProfit = calculateProfitForPeriod(bot.trades || [], monthAgo);
-
-          return {
-            id: bot.id,
-            name: bot.name,
-            status: bot.isActive ? 'active' : 'paused',
-            trades: bot.totalTrades || 0,
-            profitToday: todayProfit,
-            profitWeek: weekProfit,
-            profitMonth: monthProfit
-          };
-        } catch (botError) {
-          console.error(`Fehler bei Bot ${bot.id}:`, botError);
-          // Im Fehlerfall Standard-Bot-Daten zurückgeben
-          return {
-            id: bot.id,
-            name: bot.name || 'Unbekannter Bot',
-            status: bot.isActive ? 'active' : 'paused',
-            trades: bot.totalTrades || 0,
-            profitToday: 0,
-            profitWeek: 0,
-            profitMonth: 0
-          };
-        }
-      });
-
-      return NextResponse.json(formattedBots);
     } catch (dbError) {
       console.error('Datenbankfehler beim Abrufen der Bots:', dbError);
       // Bei Datenbankfehlern Standard-Bots zurückgeben
-      return NextResponse.json(defaultBots);
+      apiResponse = NextResponse.json(defaultBots);
     }
   } catch (error) {
     console.error('Schwerwiegender Fehler beim Abrufen der Bots:', error);
-    return NextResponse.json({ error: 'Fehler beim Abrufen der Bots' }, { status: 500 });
+    apiResponse = NextResponse.json({ error: 'Fehler beim Abrufen der Bots' }, { status: 500 });
   }
+  
+  apiResponse.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  apiResponse.headers.set('Pragma', 'no-cache');
+  apiResponse.headers.set('Expires', '0');
+  return apiResponse;
 }
 
 // Hilfsfunktion zur Berechnung des Profits für einen Zeitraum

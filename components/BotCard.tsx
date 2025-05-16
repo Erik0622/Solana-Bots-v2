@@ -55,17 +55,19 @@ const BotCard: FC<BotCardProps> = ({
   
   // Status-Polling
   useEffect(() => {
-    // Initialer Status-Check
-    fetchBotStatus();
-    
-    // Periodisches Polling des Bot-Status (alle 10 Sekunden)
-    const statusInterval = setInterval(fetchBotStatus, 10000);
+    let statusInterval: NodeJS.Timeout | undefined;
+
+    if (connected && publicKey) {
+      fetchBotStatus(); // Initialer Check
+      statusInterval = setInterval(fetchBotStatus, 10000); // Poll alle 10 Sekunden
+    }
     
     return () => {
-      // Clean-up beim Unmount der Komponente
-      clearInterval(statusInterval);
+      if (statusInterval) {
+        clearInterval(statusInterval);
+      }
     };
-  }, [id]); // Neu starten, wenn sich die Bot-ID ändert
+  }, [id, connected, publicKey]); // Neu starten, wenn sich id, connected oder publicKey ändert
 
   // Funktion zum Abrufen des aktuellen Bot-Status
   const fetchBotStatus = async () => {
@@ -73,21 +75,28 @@ const BotCard: FC<BotCardProps> = ({
     
     try {
       const response = await fetch(`/api/bots/status?botId=${id}`);
-      if (!response.ok) return;
+      if (!response.ok) {
+        console.warn(`Konnte Bot-Status für ${id} nicht abrufen: ${response.status}`);
+        return;
+      }
       
-      const { status: botStatus } = await response.json();
+      const data = await response.json();
+      if (data.error) {
+        console.warn(`Fehler vom API beim Abrufen des Bot-Status (${id}): ${data.error}`);
+        return;
+      }
+      const botStatus = data.status;
       
-      // Nur Status aktualisieren, wenn er sich geändert hat
-      if (botStatus !== status) {
-        console.log(`Bot ${id} Status geändert: ${status} -> ${botStatus}`);
-        onStatusChange(id, botStatus);
+      // Nur Status aktualisieren, wenn er sich geändert hat und gültig ist
+      if (botStatus && (botStatus === 'active' || botStatus === 'paused') && botStatus !== status) {
+        console.log(`BotCard: Bot ${id} Status geändert via Polling: ${status} -> ${botStatus}`);
+        onStatusChange(id, botStatus as 'active' | 'paused');
       }
     } catch (fetchError) {
       console.warn(`Fehler beim Abrufen des Bot-Status (${id}):`, fetchError);
     }
   };
 
-  // Handle risk slider change
   const handleRiskChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newRisk = Number(e.target.value);
     setRiskPercentage(newRisk);
@@ -96,69 +105,38 @@ const BotCard: FC<BotCardProps> = ({
     }
   };
 
-  // Generate mock performance data
   const generatePerformanceData = (days: number) => {
     const data = [];
     const now = new Date();
-    
-    // Different patterns for different bots (fixed, not affected by risk slider)
     const getProfit = (i: number) => {
       switch (id) {
-        case 'volume-tracker':
-          return 0.4 + (Math.sin(i * 0.5) * 0.3) + (Math.random() * 0.2);
-        case 'trend-surfer':
-          return 0.7 + (Math.sin(i * 0.3) * 0.5) + (Math.random() * 0.3);
-        case 'dip-hunter':
-          return 0.3 + (Math.cos(i * 0.2) * 0.1) + (Math.random() * 0.1);
-        default:
-          return 0.5 + (Math.random() * 0.3);
+        case 'volume-tracker': return 0.4 + (Math.sin(i * 0.5) * 0.3) + (Math.random() * 0.2);
+        case 'trend-surfer': return 0.7 + (Math.sin(i * 0.3) * 0.5) + (Math.random() * 0.3);
+        case 'dip-hunter': return 0.3 + (Math.cos(i * 0.2) * 0.1) + (Math.random() * 0.1);
+        default: return 0.5 + (Math.random() * 0.3);
       }
     };
-    
-    // Use a fixed seed for random to ensure the chart shape remains consistent
-    const seededRandom = (i: number) => {
-      return Math.sin(i * 9876) * 10000 % 1;
-    };
-    
     for (let i = days; i >= 0; i--) {
       const date = new Date(now);
       date.setDate(date.getDate() - i);
-      
-      // Use the fixed pattern but scale the values based on the risk percentage
       let baseProfit = getProfit(i);
-      
-      // Apply a scaling factor based on the bot's base risk profile
-      // but don't change the shape of the chart
-      const scalingFactor = baseRiskPerTrade / 15; // 15% is our reference point
+      const scalingFactor = baseRiskPerTrade / 15;
       const profit = baseProfit * scalingFactor;
-      
-      data.push({
-        date: date.toISOString().split('T')[0],
-        profit: parseFloat(profit.toFixed(2))
-      });
+      data.push({ date: date.toISOString().split('T')[0], profit: parseFloat(profit.toFixed(2)) });
     }
-    
     return data;
   };
   
-  const performanceData = performanceTimeframe === '7d' 
-    ? generatePerformanceData(7) 
-    : generatePerformanceData(30);
-  
-  // Calculate totals
+  const performanceData = performanceTimeframe === '7d' ? generatePerformanceData(7) : generatePerformanceData(30);
   const totalProfit = performanceData.reduce((sum, day) => sum + day.profit, 0).toFixed(2);
   const averageProfit = (performanceData.reduce((sum, day) => sum + day.profit, 0) / performanceData.length).toFixed(2);
 
   const getRiskColor = (risk: string) => {
     switch (risk) {
-      case 'low':
-        return 'text-green-400';
-      case 'moderate':
-        return 'text-yellow-400';
-      case 'high':
-        return 'text-red-400';
-      default:
-        return 'text-white';
+      case 'low': return 'text-green-400';
+      case 'moderate': return 'text-yellow-400';
+      case 'high': return 'text-red-400';
+      default: return 'text-white';
     }
   };
 
@@ -167,17 +145,12 @@ const BotCard: FC<BotCardProps> = ({
       setError('Please connect your wallet first');
       return;
     }
-
     setIsLoading(true);
     setError(null);
-
     try {
-      // Call backend to start the trading bot
       const response = await fetch('/api/bot/activate', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           botId: id,
           walletAddress: publicKey.toString(),
@@ -186,54 +159,50 @@ const BotCard: FC<BotCardProps> = ({
           botType: getBotTypeFromName(name)
         }),
       });
-
       if (!response.ok) {
-        throw new Error('Failed to activate bot');
+        const errorData = await response.json().catch(() => ({ error: 'Failed to prepare bot activation/deactivation' }));
+        throw new Error(errorData.error || 'Failed to prepare bot activation/deactivation');
       }
-
       const { transaction: serializedTransaction } = await response.json();
-      
-      // Deserialize and sign the transaction
       const transaction = Transaction.from(Buffer.from(serializedTransaction, 'base64'));
       const signedTransaction = await signTransaction(transaction);
-      
-      // Send signed transaction to backend
       const confirmResponse = await fetch('/api/bot/confirm-activation', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           botId: id,
           signedTransaction: signedTransaction.serialize().toString('base64'),
           action: status === 'active' ? 'deactivate' : 'activate'
         }),
       });
-
       if (!confirmResponse.ok) {
-        throw new Error('Failed to confirm bot activation');
+        const errorData = await confirmResponse.json().catch(() => ({ error: 'Failed to confirm bot activation/deactivation' }));
+        throw new Error(errorData.error || 'Failed to confirm bot activation/deactivation');
       }
-
-      onStatusChange(id, status === 'active' ? 'paused' : 'active');
+      const confirmationResult = await confirmResponse.json();
+      if (confirmationResult.success && confirmationResult.status) {
+        const newStatus = confirmationResult.status === 'inactive' ? 'paused' : confirmationResult.status;
+        console.log(`BotCard: Bot ${id} Status geändert via activateBot: ${status} -> ${newStatus}`);
+        onStatusChange(id, newStatus as 'active' | 'paused');
+      } else {
+        console.warn('Bot-Aktivierungs-Bestätigung lieferte keinen klaren Status. Starte fetchBotStatus manuell.');
+        fetchBotStatus(); 
+      }
     } catch (err) {
-      setError('Failed to activate bot. Please try again.');
-      console.error('Bot activation error:', err);
+      const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred during bot activation/deactivation.';
+      setError(errorMessage);
+      console.error('Bot activation error in BotCard:', err);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Hilfsfunktion zum Ermitteln des Bot-Typs basierend auf dem Namen
   const getBotTypeFromName = (botName: string): string => {
     const nameLower = botName.toLowerCase();
-    if (nameLower.includes('volume') || nameLower.includes('tracker')) {
-      return 'volume-tracker';
-    } else if (nameLower.includes('trend') || nameLower.includes('surfer') || nameLower.includes('momentum')) {
-      return 'trend-surfer';
-    } else if (nameLower.includes('dip') || nameLower.includes('hunter') || nameLower.includes('arb')) {
-      return 'dip-hunter';
-    }
-    return 'volume-tracker'; // Standardwert
+    if (nameLower.includes('volume') || nameLower.includes('tracker')) return 'volume-tracker';
+    if (nameLower.includes('trend') || nameLower.includes('surfer') || nameLower.includes('momentum')) return 'trend-surfer';
+    if (nameLower.includes('dip') || nameLower.includes('hunter') || nameLower.includes('arb')) return 'dip-hunter';
+    return 'volume-tracker';
   };
 
   return (
@@ -247,9 +216,7 @@ const BotCard: FC<BotCardProps> = ({
           </span>
         </div>
       </div>
-
       <p className="text-sm sm:text-base text-white/80 mb-4 sm:mb-6 line-clamp-3 hover:line-clamp-none transition-all duration-300">{description}</p>
-
       <div className="grid grid-cols-2 gap-2 sm:gap-4 mb-4 sm:mb-6">
         <div className="stat-card bg-dark-lighter p-2 sm:p-4 rounded-lg backdrop-blur-sm hover:scale-105 transition-transform duration-300">
           <p className="text-xs sm:text-sm text-white/60">Weekly Return</p>
@@ -268,8 +235,6 @@ const BotCard: FC<BotCardProps> = ({
           <p className="text-base sm:text-2xl font-bold text-white">{winRate}</p>
         </div>
       </div>
-      
-      {/* Performance Chart Section */}
       <div className="mb-4 sm:mb-6 bg-dark-lighter p-2 sm:p-4 rounded-lg">
         <div className="flex justify-between items-center mb-2 sm:mb-3">
           <h4 className="text-sm sm:text-lg font-semibold">Performance History</h4>
@@ -288,7 +253,6 @@ const BotCard: FC<BotCardProps> = ({
             </button>
           </div>
         </div>
-        
         <div className="h-28 sm:h-36">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={performanceData}>
@@ -319,7 +283,6 @@ const BotCard: FC<BotCardProps> = ({
             </LineChart>
           </ResponsiveContainer>
         </div>
-        
         <div className="flex justify-between mt-2">
           <div>
             <p className="text-xs text-white/60">Total Return</p>
@@ -331,17 +294,13 @@ const BotCard: FC<BotCardProps> = ({
           </div>
         </div>
       </div>
-
       <div className="mb-4 sm:mb-6">
         <h4 className="text-sm sm:text-lg font-semibold mb-1 sm:mb-2">Strategy</h4>
         <p className="text-xs sm:text-sm text-white/80 line-clamp-3 hover:line-clamp-none transition-all duration-300">{strategy}</p>
       </div>
-      
-      {/* Individual Risk Management Section */}
       <div className="mb-4 sm:mb-6">
         <h4 className="text-sm sm:text-lg font-semibold mb-1 sm:mb-2">Risk Management</h4>
         <p className="text-xs sm:text-sm text-white/80 mb-2 sm:mb-3">{riskManagement}</p>
-        
         <div className="bg-dark-lighter p-2 sm:p-3 rounded-lg">
           <div className="flex justify-between text-xs text-white/60 mb-1">
             <span>Low Risk (1%)</span>
@@ -360,7 +319,6 @@ const BotCard: FC<BotCardProps> = ({
           </div>
         </div>
       </div>
-
       <div className="mt-auto">
         {connected ? (
           <div className="flex gap-2">
@@ -392,7 +350,6 @@ const BotCard: FC<BotCardProps> = ({
           <WalletMultiButton className="w-full py-2 sm:py-3 justify-center text-sm sm:text-base hover:scale-105 transition-transform duration-300" />
         )}
       </div>
-
       {error && (
         <div className="mt-2 text-red-500 text-sm">
           {error}
@@ -402,4 +359,4 @@ const BotCard: FC<BotCardProps> = ({
   );
 };
 
-export default BotCard; 
+export default BotCard;

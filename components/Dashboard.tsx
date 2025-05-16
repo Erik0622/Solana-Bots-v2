@@ -63,11 +63,12 @@ const Dashboard: FC = () => {
       fetchPerformanceData();
       fetchConnectedBots();
       
-      // Regelmäßige Aktualisierungen
-      const botsInterval = setInterval(fetchConnectedBots, 10000); // Alle 10 Sekunden
-      
+      const botsListInterval = setInterval(fetchConnectedBots, 10000);
+      const balanceInterval = setInterval(fetchBalance, 15000);
+
       return () => {
-        clearInterval(botsInterval);
+        clearInterval(botsListInterval);
+        clearInterval(balanceInterval);
       };
     }
   }, [connected, publicKey, timeframe]);
@@ -142,9 +143,16 @@ const Dashboard: FC = () => {
     if (!connected || !publicKey) return;
     try {
       const response = await fetch(`/api/bots?wallet=${publicKey.toString()}`);
-      if (!response.ok) throw new Error('Failed to fetch bots');
+      if (!response.ok) {
+        console.error('Failed to fetch bots', response.status);
+        return;
+      }
       const data = await response.json();
-      setConnectedBots(data);
+      if (data.error) {
+        console.error('Error from /api/bots:', data.error);
+        return;
+      }
+      setConnectedBots(data); 
     } catch (error) {
       console.error('Error fetching bots:', error);
     }
@@ -167,68 +175,47 @@ const Dashboard: FC = () => {
 
       const uiAction = currentBot.status === 'active' ? 'pause' : 'resume';
       const backendApiAction = uiAction === 'resume' ? 'activate' : 'deactivate';
-
-      // Derive botType from name, e.g., "Volume Tracker Bot" -> "volume-tracker"
       const derivedBotType = currentBot.name.replace(/ Bot$/i, '').toLowerCase().replace(/\s+/g, '-');
 
-      // 1. Fetch unsigned transaction from our backend
-      const prepareTxResponse = await fetch('/api/bot/activate', { // This endpoint handles both activate and deactivate
+      const prepareTxResponse = await fetch('/api/bot/activate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          botId,
-          walletAddress: publicKey.toString(),
-          riskPercentage: 5, // This should ideally be configurable per bot
-          action: backendApiAction,
-          botType: derivedBotType 
-        }),
+        body: JSON.stringify({ botId, walletAddress: publicKey.toString(), riskPercentage: 5, action: backendApiAction, botType: derivedBotType }),
       });
 
       if (!prepareTxResponse.ok) {
-        const errorData = await prepareTxResponse.json();
+        const errorData = await prepareTxResponse.json().catch(() => ({ error: 'Failed to prepare transaction.'}));
         throw new Error(errorData.error || 'Failed to prepare transaction.');
       }
       
-      const { transaction: serializedUnsignedTx, botPda } = await prepareTxResponse.json();
-
-      // 2. Deserialize and sign the transaction with the user's wallet
+      const { transaction: serializedUnsignedTx } = await prepareTxResponse.json();
       const transaction = Transaction.from(Buffer.from(serializedUnsignedTx, 'base64'));
-      
-      console.log("Signing transaction:", transaction);
       const signedTx = await signTransaction(transaction);
-      console.log("Transaction signed:", signedTx);
-      
       const serializedSignedTx = Buffer.from(signedTx.serialize()).toString('base64');
 
-      // 3. Send the signed transaction to the confirmation endpoint
       const confirmResponse = await fetch('/api/bot/confirm-activation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          botId,
-          signedTransaction: serializedSignedTx,
-          action: backendApiAction 
-        }),
+        body: JSON.stringify({ botId, signedTransaction: serializedSignedTx, action: backendApiAction }),
       });
       
       if (!confirmResponse.ok) {
-        const errorData = await confirmResponse.json();
+        const errorData = await confirmResponse.json().catch(() => ({ error: 'Failed to confirm bot activation/deactivation.'}));
         throw new Error(errorData.error || 'Failed to confirm bot activation/deactivation.');
       }
       
       const confirmationData = await confirmResponse.json();
-      console.log("Confirmation data:", confirmationData);
-
-      // Update local state after successful API call chain
-      setConnectedBots(bots => 
-        bots.map(bot => 
-          bot.id === botId ? 
-            {...bot, status: backendApiAction === 'activate' ? 'active' : 'paused'} : 
-            bot
-        )
-      );
-      // Optionally, refetch bots to get the very latest state from DB
-      // await fetchConnectedBots(); 
+      if (confirmationData.success && confirmationData.status) {
+        const newStatus = confirmationData.status === 'inactive' ? 'paused' : confirmationData.status as 'active' | 'paused';
+        setConnectedBots(prevBots => 
+          prevBots.map(b => 
+            b.id === botId ? { ...b, status: newStatus } : b
+          )
+        );
+      } else {
+        console.warn('Confirmation response did not include a clear status.');
+      }
+      await fetchConnectedBots();
 
     } catch (error) {
       console.error('Error toggling bot status:', error);
@@ -237,45 +224,6 @@ const Dashboard: FC = () => {
       setIsLoading(false);
     }
   };
-
-  // Funktion für den Bot-Status-Check
-  const checkBotStatus = async () => {
-    if (!connected || !publicKey || connectedBots.length === 0) return;
-    
-    try {
-      // Prüfe jeden Bot einzeln
-      for (const bot of connectedBots) {
-        const response = await fetch(`/api/bots/status?botId=${bot.id}`);
-        if (!response.ok) continue;
-        
-        const { status } = await response.json();
-        
-        // Aktualisiere nur, wenn sich der Status geändert hat
-        if (bot.status !== status) {
-          console.log(`Dashboard: Bot ${bot.id} Status geändert: ${bot.status} -> ${status}`);
-          // Aktualisiere den einzelnen Bot im State
-          setConnectedBots(prev => 
-            prev.map(b => 
-              b.id === bot.id ? { ...b, status } : b
-            )
-          );
-        }
-      }
-    } catch (error) {
-      console.warn("Fehler beim Prüfen der Bot-Status:", error);
-    }
-  };
-
-  // Regelmäßiger Status-Check
-  useEffect(() => {
-    // Initial Check
-    if (connected && connectedBots.length > 0) {
-      checkBotStatus();
-      
-      const statusInterval = setInterval(checkBotStatus, 5000);
-      return () => clearInterval(statusInterval);
-    }
-  }, [connected, connectedBots.length]);
 
   if (!connected) {
     return (
