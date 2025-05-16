@@ -53,6 +53,40 @@ const BotCard: FC<BotCardProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
+  // Status-Polling
+  useEffect(() => {
+    // Initialer Status-Check
+    fetchBotStatus();
+    
+    // Periodisches Polling des Bot-Status (alle 10 Sekunden)
+    const statusInterval = setInterval(fetchBotStatus, 10000);
+    
+    return () => {
+      // Clean-up beim Unmount der Komponente
+      clearInterval(statusInterval);
+    };
+  }, [id]); // Neu starten, wenn sich die Bot-ID ändert
+
+  // Funktion zum Abrufen des aktuellen Bot-Status
+  const fetchBotStatus = async () => {
+    if (!connected || !publicKey) return;
+    
+    try {
+      const response = await fetch(`/api/bots/status?botId=${id}`);
+      if (!response.ok) return;
+      
+      const { status: botStatus } = await response.json();
+      
+      // Nur Status aktualisieren, wenn er sich geändert hat
+      if (botStatus !== status) {
+        console.log(`Bot ${id} Status geändert: ${status} -> ${botStatus}`);
+        onStatusChange(id, botStatus);
+      }
+    } catch (fetchError) {
+      console.warn(`Fehler beim Abrufen des Bot-Status (${id}):`, fetchError);
+    }
+  };
+
   // Handle risk slider change
   const handleRiskChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newRisk = Number(e.target.value);

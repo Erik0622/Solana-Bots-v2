@@ -62,6 +62,13 @@ const Dashboard: FC = () => {
       fetchPositions();
       fetchPerformanceData();
       fetchConnectedBots();
+      
+      // Regelmäßige Aktualisierungen
+      const botsInterval = setInterval(fetchConnectedBots, 10000); // Alle 10 Sekunden
+      
+      return () => {
+        clearInterval(botsInterval);
+      };
     }
   }, [connected, publicKey, timeframe]);
 
@@ -230,6 +237,45 @@ const Dashboard: FC = () => {
       setIsLoading(false);
     }
   };
+
+  // Funktion für den Bot-Status-Check
+  const checkBotStatus = async () => {
+    if (!connected || !publicKey || connectedBots.length === 0) return;
+    
+    try {
+      // Prüfe jeden Bot einzeln
+      for (const bot of connectedBots) {
+        const response = await fetch(`/api/bots/status?botId=${bot.id}`);
+        if (!response.ok) continue;
+        
+        const { status } = await response.json();
+        
+        // Aktualisiere nur, wenn sich der Status geändert hat
+        if (bot.status !== status) {
+          console.log(`Dashboard: Bot ${bot.id} Status geändert: ${bot.status} -> ${status}`);
+          // Aktualisiere den einzelnen Bot im State
+          setConnectedBots(prev => 
+            prev.map(b => 
+              b.id === bot.id ? { ...b, status } : b
+            )
+          );
+        }
+      }
+    } catch (error) {
+      console.warn("Fehler beim Prüfen der Bot-Status:", error);
+    }
+  };
+
+  // Regelmäßiger Status-Check
+  useEffect(() => {
+    // Initial Check
+    if (connected && connectedBots.length > 0) {
+      checkBotStatus();
+      
+      const statusInterval = setInterval(checkBotStatus, 5000);
+      return () => clearInterval(statusInterval);
+    }
+  }, [connected, connectedBots.length]);
 
   if (!connected) {
     return (
