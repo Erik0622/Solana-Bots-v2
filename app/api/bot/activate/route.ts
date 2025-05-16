@@ -119,6 +119,17 @@ export async function POST(request: Request) {
         programId
       )[0];
       
+      // Füge einen Mock-Blockhash für die Simulation hinzu
+      try {
+        const { blockhash } = await connection.getLatestBlockhash('finalized');
+        transaction.recentBlockhash = blockhash;
+        transaction.feePayer = userWallet;
+      } catch (error) {
+        console.log("Fehler beim Abrufen des Blockhash im Mock-Modus, verwende Dummy-Wert");
+        transaction.recentBlockhash = 'mockblockhash123456789abcdef';
+        transaction.feePayer = userWallet;
+      }
+      
       // Serialisiere die leere Transaktion
       const serializedTransaction = transaction.serialize({
         requireAllSignatures: false,
@@ -226,6 +237,11 @@ export async function POST(request: Request) {
         .instruction()
       );
     }
+
+    // Füge den aktuellen Blockhash hinzu (wichtig für gültige Transaktion)
+    const { blockhash } = await connection.getLatestBlockhash('finalized');
+    transaction.recentBlockhash = blockhash;
+    transaction.feePayer = userWallet;
 
     // Serialisiere die Transaktion
     const serializedTransaction = transaction.serialize({
