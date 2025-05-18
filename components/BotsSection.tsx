@@ -30,16 +30,29 @@ const BotsSection: FC = () => {
   
   const { publicKey } = useWallet();
 
-  // Aktualisiere den Zustand, wenn sich die Seite ändert
+  // Regelmäßig den Status aus localStorage abrufen
   useEffect(() => {
+    // Initial laden
     setBotStatuses(getAllBotStatus());
+    
+    // Regelmäßig überprüfen (alle 2 Sekunden)
+    const statusInterval = setInterval(() => {
+      const freshStatuses = getAllBotStatus();
+      console.log('BotsSection: Aktualisiere Status aus localStorage:', freshStatuses);
+      setBotStatuses(freshStatuses);
+    }, 2000);
+    
+    return () => clearInterval(statusInterval);
   }, []);
   
   // Handle bot status change
   const handleStatusChange = (id: string, status: 'active' | 'paused') => {
     console.log(`BotsSection: Status für Bot ${id} aktualisiert auf ${status}`);
+    // Speichere im localStorage
     setBotStatus(id, status);
-    setBotStatuses({...botStatuses, [id]: status});
+    
+    // Aktualisiere den lokalen Zustand durch frisches Laden aus localStorage
+    setBotStatuses(getAllBotStatus());
   };
 
   const bots = [

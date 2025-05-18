@@ -169,12 +169,15 @@ const Dashboard: FC = () => {
       }
       
       const currentStatuses = getAllBotStatus();
+      console.log('Dashboard: Aktueller localStorage-Status:', currentStatuses);
       
       const updatedBots = data.map((bot: any) => {
         const normalizedId = normalizeBotId(bot.id);
+        const status = currentStatuses[normalizedId] || 'paused';
+        console.log(`Dashboard: Bot ${normalizedId} Status aus localStorage: ${status}`);
         return {
           ...bot,
-          status: currentStatuses[normalizedId] || 'paused'
+          status: status
         };
       });
       

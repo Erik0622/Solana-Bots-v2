@@ -78,9 +78,16 @@ const BotCard: FC<BotCardProps> = ({
 
   // Funktion zum Abrufen des aktuellen Bot-Status
   const fetchBotStatus = async () => {
+    // WICHTIG: Priorität auf den lokalen Status setzen
+    // Wenn die API-Verbindung nicht richtig funktioniert, 
+    // vertrauen wir unserem lokalen Status mehr
+    
     if (!connected || !publicKey) return;
     
     try {
+      // Lese den aktuellen Status aus localStorage, bevor wir die API abfragen
+      const localStatus = getBotStatus(id);
+      
       // Verwende Cache-Busting-Parameter und erzwinge keine Cache-Antworten
       const timestamp = Date.now(); // Cache-Busting-Timestamp
       const response = await fetch(`/api/bots/status?botId=${id}&_=${timestamp}`, {
@@ -94,22 +101,27 @@ const BotCard: FC<BotCardProps> = ({
       
       if (!response.ok) {
         console.warn(`Konnte Bot-Status für ${id} nicht abrufen: ${response.status}`);
+        // Bei API-Fehler lokalen Status beibehalten
         return;
       }
       
       const data = await response.json();
-      const newStatus = data.status as 'active' | 'paused';
+      const apiStatus = data.status as 'active' | 'paused';
       
-      // Nur Status aktualisieren, wenn er sich geändert hat und gültig ist
-      if (newStatus && (newStatus === 'active' || newStatus === 'paused') && newStatus !== botStatus) {
-        console.log(`BotCard: Bot ${id} Status geändert via Polling: ${botStatus} -> ${newStatus}`);
+      // Nur wenn der API-Status 'active' ist und der lokale Status 'paused',
+      // ODER wenn der lokale Status noch nicht gesetzt wurde,
+      // aktualisiere auf den API-Status
+      if ((apiStatus === 'active' && localStatus === 'paused') || !localStatus) {
+        console.log(`BotCard: Bot ${id} Status wird von API aktualisiert: ${botStatus} -> ${apiStatus}`);
         
         // Aktualisiere sowohl den lokalen Zustand als auch den globalen Speicher
-        setBotStatusState(newStatus);
-        setBotStatus(id, newStatus);
+        setBotStatusState(apiStatus);
+        setBotStatus(id, apiStatus);
         
         // Informiere die Elternkomponente
-        onStatusChange(id, newStatus);
+        onStatusChange(id, apiStatus);
+      } else {
+        console.log(`BotCard: API-Status (${apiStatus}) wird ignoriert, da der lokale Status (${localStatus}) Priorität hat`);
       }
     } catch (fetchError) {
       console.warn(`Fehler beim Abrufen des Bot-Status (${id}):`, fetchError);
