@@ -1,6 +1,6 @@
 'use client';
 
-import React, { FC } from 'react';
+import React, { FC, useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -8,7 +8,24 @@ import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 
 const Header: FC = () => {
   const pathname = usePathname();
+  const [currentHash, setCurrentHash] = useState('');
+  
+  // Aktualisiere den Hash nur clientseitig
+  useEffect(() => {
+    // Setze den initialen Hash
+    setCurrentHash(window.location.hash.substring(1));
+    
+    // Höre auf Hash-Änderungen
+    const handleHashChange = () => {
+      setCurrentHash(window.location.hash.substring(1));
+    };
+    
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+  
   const isActive = (path: string) => pathname === path;
+  const isActiveHash = (hash: string) => pathname === '/' && currentHash === hash;
   
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-dark/80 backdrop-blur-md px-6 py-4 border-b border-dark-lighter">
@@ -30,7 +47,7 @@ const Header: FC = () => {
           <Link 
             href="#bots" 
             className={`text-white/80 hover:text-primary transition-colors ${
-              pathname === '/' && 'bots' === location.hash.substring(1) ? 'text-primary' : ''
+              isActiveHash('bots') ? 'text-primary' : ''
             }`}
           >
             Trading Bots
@@ -46,7 +63,7 @@ const Header: FC = () => {
           <Link 
             href="#features" 
             className={`text-white/80 hover:text-primary transition-colors ${
-              pathname === '/' && 'features' === location.hash.substring(1) ? 'text-primary' : ''
+              isActiveHash('features') ? 'text-primary' : ''
             }`}
           >
             Features
@@ -62,7 +79,7 @@ const Header: FC = () => {
           <Link 
             href="#faq" 
             className={`text-white/80 hover:text-primary transition-colors ${
-              pathname === '/' && 'faq' === location.hash.substring(1) ? 'text-primary' : ''
+              isActiveHash('faq') ? 'text-primary' : ''
             }`}
           >
             FAQ
