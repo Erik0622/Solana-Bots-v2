@@ -28,6 +28,13 @@ const DEFAULT_STATUS: Record<BotId, BotStatus> = {
   'dip-hunter': 'paused',
 };
 
+// Standard-Risiko-Einstellungen für jeden Bot
+const DEFAULT_RISK_SETTINGS: Record<BotId, number> = {
+  'volume-tracker': 15,
+  'trend-surfer': 15,
+  'dip-hunter': 15,
+};
+
 // Lade den Status aus localStorage
 export function getBotStatus(botId: string): BotStatus {
   try {
@@ -109,4 +116,76 @@ export function toggleBotStatus(botId: string): BotStatus {
   const newStatus: BotStatus = currentStatus === 'active' ? 'paused' : 'active';
   setBotStatus(botId, newStatus);
   return newStatus;
+}
+
+// Risiko-Einstellungen speichern und abrufen
+
+// Speichere das Risiko-Level für einen Bot
+export function saveBotRisk(botId: string, riskLevel: number): void {
+  try {
+    if (typeof window === 'undefined') return; // Serverside rendering
+    
+    const normalizedId = normalizeBotId(botId);
+    const currentRiskLevels = getBotRiskLevels();
+    
+    // Aktualisiere das Risiko des angegebenen Bots
+    currentRiskLevels[normalizedId] = riskLevel;
+    
+    // Speichere alles im localStorage
+    localStorage.setItem('botRiskLevels', JSON.stringify(currentRiskLevels));
+    
+    console.log(`Bot ${normalizedId} Risiko geändert: ${riskLevel}%`);
+  } catch (error) {
+    console.error('Fehler beim Speichern des Bot-Risikos:', error);
+  }
+}
+
+// Lade das Risiko-Level für einen Bot
+export function getBotRisk(botId: string): number {
+  try {
+    if (typeof window === 'undefined') return DEFAULT_RISK_SETTINGS[normalizeBotId(botId)]; // Serverside rendering
+    
+    const normalizedId = normalizeBotId(botId);
+    const savedRiskLevels = localStorage.getItem('botRiskLevels');
+    
+    if (savedRiskLevels) {
+      const parsed = JSON.parse(savedRiskLevels) as Record<BotId, number>;
+      return parsed[normalizedId] || DEFAULT_RISK_SETTINGS[normalizedId];
+    }
+    
+    return DEFAULT_RISK_SETTINGS[normalizedId];
+  } catch (error) {
+    console.error('Fehler beim Laden des Bot-Risikos:', error);
+    return DEFAULT_RISK_SETTINGS[normalizeBotId(botId)];
+  }
+}
+
+// Lade alle Risiko-Level für alle Bots
+export function getBotRiskLevels(): Record<BotId, number> {
+  try {
+    if (typeof window === 'undefined') return DEFAULT_RISK_SETTINGS; // Serverside rendering
+    
+    const savedRiskLevels = localStorage.getItem('botRiskLevels');
+    
+    if (savedRiskLevels) {
+      const parsed = JSON.parse(savedRiskLevels) as Record<BotId, number>;
+      
+      // Stelle sicher, dass alle bekannten Bots ein Risiko-Level haben
+      const result = {...DEFAULT_RISK_SETTINGS};
+      
+      // Übernehme nur gültige Risiko-Level für bekannte Bots
+      BOT_IDS.forEach(id => {
+        if (parsed[id] && typeof parsed[id] === 'number' && parsed[id] >= 1 && parsed[id] <= 50) {
+          result[id] = parsed[id];
+        }
+      });
+      
+      return result;
+    }
+    
+    return DEFAULT_RISK_SETTINGS;
+  } catch (error) {
+    console.error('Fehler beim Laden der Bot-Risiko-Level:', error);
+    return DEFAULT_RISK_SETTINGS;
+  }
 } 

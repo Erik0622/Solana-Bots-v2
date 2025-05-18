@@ -5,7 +5,7 @@ import { useWallet } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { LineChart, Line, ResponsiveContainer, Tooltip, YAxis } from 'recharts';
 import { Connection, PublicKey, Transaction, SystemProgram } from '@solana/web3.js';
-import { getBotStatus, setBotStatus, isBotActive } from '@/lib/botState';
+import { getBotStatus, setBotStatus, isBotActive, saveBotRisk, getBotRisk } from '@/lib/botState';
 
 interface BotCardProps {
   id: string;
@@ -50,7 +50,7 @@ const BotCard: FC<BotCardProps> = ({
 }) => {
   const { connected, publicKey, signTransaction } = useWallet();
   const [performanceTimeframe, setPerformanceTimeframe] = useState<'7d' | '30d'>('7d');
-  const [riskPercentage, setRiskPercentage] = useState(baseRiskPerTrade);
+  const [riskPercentage, setRiskPercentage] = useState(getBotRisk(id));
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [botStatus, setBotStatusState] = useState<'active' | 'paused'>(getBotStatus(id));
@@ -131,27 +131,33 @@ const BotCard: FC<BotCardProps> = ({
   const handleRiskChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newRisk = Number(e.target.value);
     setRiskPercentage(newRisk);
+    // Im localStorage speichern
+    saveBotRisk(id, newRisk);
+    // Parent-Komponente benachrichtigen
     if (onRiskChange) {
       onRiskChange(newRisk);
     }
   };
 
+  // Set initial random seed for performance data
+  const [dataSeed] = useState(() => Math.random());
+  
   const generatePerformanceData = (days: number) => {
     const data = [];
     const now = new Date();
     const getProfit = (i: number) => {
       switch (id) {
-        case 'volume-tracker': return 0.4 + (Math.sin(i * 0.5) * 0.3) + (Math.random() * 0.2);
-        case 'trend-surfer': return 0.7 + (Math.sin(i * 0.3) * 0.5) + (Math.random() * 0.3);
-        case 'dip-hunter': return 0.3 + (Math.cos(i * 0.2) * 0.1) + (Math.random() * 0.1);
-        default: return 0.5 + (Math.random() * 0.3);
+        case 'volume-tracker': return 0.4 + (Math.sin(i * 0.5 + dataSeed * 10) * 0.3) + (dataSeed * 0.2);
+        case 'trend-surfer': return 0.7 + (Math.sin(i * 0.3 + dataSeed * 10) * 0.5) + (dataSeed * 0.3);
+        case 'dip-hunter': return 0.3 + (Math.cos(i * 0.2 + dataSeed * 10) * 0.1) + (dataSeed * 0.1);
+        default: return 0.5 + (dataSeed * 0.3);
       }
     };
     for (let i = days; i >= 0; i--) {
       const date = new Date(now);
       date.setDate(date.getDate() - i);
       let baseProfit = getProfit(i);
-      const scalingFactor = baseRiskPerTrade / 15;
+      const scalingFactor = riskPercentage / 15;
       const profit = baseProfit * scalingFactor;
       data.push({ date: date.toISOString().split('T')[0], profit: parseFloat(profit.toFixed(2)) });
     }

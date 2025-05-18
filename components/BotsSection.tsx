@@ -4,7 +4,7 @@ import React, { FC, useState, useEffect } from 'react';
 import BotCard from './BotCard';
 import Link from 'next/link';
 import { useWallet } from '@solana/wallet-adapter-react';
-import { getBotStatus, setBotStatus, getAllBotStatus, BotId } from '@/lib/botState';
+import { getBotStatus, setBotStatus, getAllBotStatus, BotId, getBotRisk, getBotRiskLevels } from '@/lib/botState';
 
 // Funktion zur Normalisierung der Bot-ID analog zu BotStatusContext
 function getBotId(id: string): string {
@@ -21,9 +21,9 @@ function getBotId(id: string): string {
 
 const BotsSection: FC = () => {
   // Individual risk settings for each bot (1-50%)
-  const [volumeTrackerRisk, setVolumeTrackerRisk] = useState(15);
-  const [momentumBotRisk, setMomentumBotRisk] = useState(15);
-  const [dipHunterRisk, setDipHunterRisk] = useState(15);
+  const [volumeTrackerRisk, setVolumeTrackerRisk] = useState(getBotRisk('volume-tracker'));
+  const [momentumBotRisk, setMomentumBotRisk] = useState(getBotRisk('trend-surfer'));
+  const [dipHunterRisk, setDipHunterRisk] = useState(getBotRisk('dip-hunter'));
   
   // Lokalen Zustand für Bot-Status verwenden
   const [botStatuses, setBotStatuses] = useState(getAllBotStatus());
@@ -35,11 +35,21 @@ const BotsSection: FC = () => {
     // Initial laden
     setBotStatuses(getAllBotStatus());
     
+    // Risiko aus localStorage laden
+    setVolumeTrackerRisk(getBotRisk('volume-tracker'));
+    setMomentumBotRisk(getBotRisk('trend-surfer'));
+    setDipHunterRisk(getBotRisk('dip-hunter'));
+    
     // Regelmäßig überprüfen (alle 2 Sekunden)
     const statusInterval = setInterval(() => {
       const freshStatuses = getAllBotStatus();
       console.log('BotsSection: Aktualisiere Status aus localStorage:', freshStatuses);
       setBotStatuses(freshStatuses);
+      
+      // Auch Risiko-Einstellungen aktualisieren
+      setVolumeTrackerRisk(getBotRisk('volume-tracker'));
+      setMomentumBotRisk(getBotRisk('trend-surfer'));
+      setDipHunterRisk(getBotRisk('dip-hunter'));
     }, 2000);
     
     return () => clearInterval(statusInterval);

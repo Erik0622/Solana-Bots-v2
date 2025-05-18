@@ -509,8 +509,8 @@ const Dashboard: FC = () => {
               </>
             ) : (
               <div className="text-center py-12 bg-dark-lighter rounded-lg">
-                <p className="text-white/60 mb-4">Keine Performance-Daten verfügbar</p>
-                <p className="text-white/60">Aktivieren Sie einen Bot, um mit dem Trading zu beginnen und Performance-Daten zu sammeln.</p>
+                <p className="text-white/60 mb-4">No performance data available</p>
+                <p className="text-white/60">Activate a bot to start trading and collect performance data.</p>
               </div>
             )}
           </>
