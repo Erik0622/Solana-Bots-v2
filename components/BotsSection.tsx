@@ -4,7 +4,20 @@ import React, { FC, useState, useEffect } from 'react';
 import BotCard from './BotCard';
 import Link from 'next/link';
 import { useWallet } from '@solana/wallet-adapter-react';
-import { useBotStatus } from '@/contexts/BotStatusContext';
+import { getBotStatus, setBotStatus, getAllBotStatus, BotId } from '@/lib/botState';
+
+// Funktion zur Normalisierung der Bot-ID analog zu BotStatusContext
+function getBotId(id: string): string {
+  const idMapping: Record<string, string> = {
+    'vol-tracker': 'volume-tracker',
+    'volume-tracker': 'volume-tracker',
+    'trend-surfer': 'trend-surfer',
+    'momentum-bot': 'trend-surfer',
+    'arb-finder': 'dip-hunter',
+    'dip-hunter': 'dip-hunter'
+  };
+  return idMapping[id.toLowerCase()] || id;
+}
 
 const BotsSection: FC = () => {
   // Individual risk settings for each bot (1-50%)
@@ -12,25 +25,26 @@ const BotsSection: FC = () => {
   const [momentumBotRisk, setMomentumBotRisk] = useState(15);
   const [dipHunterRisk, setDipHunterRisk] = useState(15);
   
+  // Lokalen Zustand für Bot-Status verwenden
+  const [botStatuses, setBotStatuses] = useState(getAllBotStatus());
+  
   const { publicKey } = useWallet();
-  const { botStatuses, updateBotStatus, fetchAllBotStatuses } = useBotStatus();
 
-  // Lade Bot-Status beim ersten Rendern und bei Wallet-Änderungen
+  // Aktualisiere den Zustand, wenn sich die Seite ändert
   useEffect(() => {
-    if (publicKey) {
-      fetchAllBotStatuses(publicKey.toString());
-    }
-  }, [publicKey]);
+    setBotStatuses(getAllBotStatus());
+  }, []);
   
   // Handle bot status change
   const handleStatusChange = (id: string, status: 'active' | 'paused') => {
     console.log(`BotsSection: Status für Bot ${id} aktualisiert auf ${status}`);
-    updateBotStatus(id, status);
+    setBotStatus(id, status);
+    setBotStatuses({...botStatuses, [id]: status});
   };
 
   const bots = [
     {
-      id: 'vol-tracker',
+      id: 'volume-tracker', // Konsistente ID-Benennung
       name: 'Volume Tracker',
       description: 'A powerful bot that detects sudden volume spikes in newly listed tokens (< 24h) and automatically trades when specific volume thresholds relative to market cap are reached.',
       weeklyReturn: '+25.0%',
@@ -42,13 +56,13 @@ const BotsSection: FC = () => {
       riskColor: 'text-yellow-400',
       baseRiskPerTrade: volumeTrackerRisk, // Dynamic risk percentage
       riskManagement: 'The bot implements automatic stop-loss mechanisms for each trade with 35% loss limitation. Risk per trade can be adjusted from 1-50% of your capital.',
-      status: botStatuses['vol-tracker'] || 'paused',
+      status: botStatuses['volume-tracker'],
       profitToday: 2.5,
       profitWeek: 25.0,
       profitMonth: 71.6
     },
     {
-      id: 'trend-surfer',
+      id: 'trend-surfer', // Konsistente ID-Benennung
       name: 'Momentum Bot',
       description: 'An advanced bot that identifies explosive price movements in new tokens by detecting consecutive green candles with increasing volume.',
       weeklyReturn: '+38.4%',
@@ -60,13 +74,13 @@ const BotsSection: FC = () => {
       riskColor: 'text-red-400',
       baseRiskPerTrade: momentumBotRisk, // Dynamic risk percentage
       riskManagement: 'Due to the more aggressive strategy, this bot has a higher base volatility with a stop-loss at 35%. Risk per trade can be adjusted from 1-50% of your capital.',
-      status: botStatuses['trend-surfer'] || 'paused',
+      status: botStatuses['trend-surfer'],
       profitToday: 3.8,
       profitWeek: 38.4,
       profitMonth: 109.4
     },
     {
-      id: 'arb-finder',
+      id: 'dip-hunter', // Konsistente ID-Benennung
       name: 'Dip Hunter',
       description: 'An intelligent bot that identifies significant price drops (30-60%) in new but stable tokens and capitalizes on high-potential entry opportunities.',
       weeklyReturn: '+23.4%',
@@ -78,7 +92,7 @@ const BotsSection: FC = () => {
       riskColor: 'text-green-400',
       baseRiskPerTrade: dipHunterRisk, // Dynamic risk percentage
       riskManagement: 'Lowest base volatility with a stop-loss of 25%. Maximum holding time of 60 minutes for reduced risk. Risk per trade can be adjusted from 1-50% of your capital.',
-      status: botStatuses['arb-finder'] || 'paused',
+      status: botStatuses['dip-hunter'],
       profitToday: 2.3,
       profitWeek: 23.4,
       profitMonth: 67.2
@@ -104,11 +118,11 @@ const BotsSection: FC = () => {
               {...bot}
               onRiskChange={(value) => {
                 // Update the respective bot's risk level
-                if (bot.id === 'vol-tracker') {
+                if (bot.id === 'volume-tracker') {
                   setVolumeTrackerRisk(value);
                 } else if (bot.id === 'trend-surfer') {
                   setMomentumBotRisk(value);
-                } else if (bot.id === 'arb-finder') {
+                } else if (bot.id === 'dip-hunter') {
                   setDipHunterRisk(value);
                 }
               }}

@@ -6,7 +6,7 @@ import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area } from 'recharts';
 import { Connection, LAMPORTS_PER_SOL, PublicKey, Transaction } from '@solana/web3.js';
 import { useConnection } from '@solana/wallet-adapter-react';
-import { useBotStatus } from '@/contexts/BotStatusContext';
+import { getBotStatus, setBotStatus, getAllBotStatus, toggleBotStatus, normalizeBotId, BotId } from '@/lib/botState';
 
 interface BotTransaction {
   timestamp: number;
@@ -47,12 +47,12 @@ interface ConnectedBot {
 const Dashboard: FC = () => {
   const { connected, publicKey, signTransaction } = useWallet();
   const { connection } = useConnection();
-  const { botStatuses, updateBotStatus, fetchAllBotStatuses } = useBotStatus();
   const [activeTab, setActiveTab] = useState<'positions' | 'performance' | 'bots'>('positions');
   const [timeframe, setTimeframe] = useState<'7d' | '30d' | 'all'>('30d');
   const [positions, setPositions] = useState<Position[]>([]);
   const [performanceData, setPerformanceData] = useState<PerformanceData[]>([]);
   const [connectedBots, setConnectedBots] = useState<ConnectedBot[]>([]);
+  const [botStatuses, setBotStatuses] = useState(getAllBotStatus());
   const [totalProfit, setTotalProfit] = useState({ today: 0, week: 0, month: 0, all: 0 });
   const [devFees, setDevFees] = useState({ total: 0, month: 0 });
   const [walletBalance, setWalletBalance] = useState<number>(0);
@@ -64,11 +64,12 @@ const Dashboard: FC = () => {
       fetchPositions();
       fetchPerformanceData();
       fetchConnectedBots();
-      fetchAllBotStatuses(publicKey.toString());
+      
+      setBotStatuses(getAllBotStatus());
       
       const botsListInterval = setInterval(() => {
         fetchConnectedBots();
-        fetchAllBotStatuses(publicKey.toString());
+        setBotStatuses(getAllBotStatus());
       }, 10000);
 
       return () => {
@@ -167,10 +168,11 @@ const Dashboard: FC = () => {
         return;
       }
       
-      // Statusinformationen aus dem Kontext anwenden, wenn vorhanden
+      const currentStatuses = getAllBotStatus();
+      
       const updatedBots = data.map((bot: any) => ({
         ...bot,
-        status: botStatuses[bot.id] || bot.status
+        status: currentStatuses[bot.id] || 'paused'
       }));
       
       setConnectedBots(updatedBots); 
@@ -179,7 +181,7 @@ const Dashboard: FC = () => {
     }
   };
 
-  const toggleBotStatus = async (botId: string) => {
+  const toggleBotStatusHandler = async (botId: string) => {
     if (!connected || !publicKey || !signTransaction) {
       setErrorMessage('Wallet not connected or does not support signing transactions.');
       return;
@@ -194,9 +196,8 @@ const Dashboard: FC = () => {
         throw new Error('Bot not found locally.');
       }
 
-      // Verwende den Status aus dem Kontext oder aus connectedBots
-      const botCurrentStatus = botStatuses[botId] || currentBot.status;
-      const uiAction = botCurrentStatus === 'active' ? 'pause' : 'resume';
+      const currentStatus = getBotStatus(botId);
+      const uiAction = currentStatus === 'active' ? 'pause' : 'resume';
       const backendApiAction = uiAction === 'resume' ? 'activate' : 'deactivate';
       const derivedBotType = currentBot.name.replace(/ Bot$/i, '').toLowerCase().replace(/\s+/g, '-');
 
@@ -231,10 +232,12 @@ const Dashboard: FC = () => {
       if (confirmationData.success && confirmationData.status) {
         const newStatus = confirmationData.status === 'inactive' ? 'paused' : confirmationData.status as 'active' | 'paused';
         
-        // Aktualisiere den Status im Kontext
-        updateBotStatus(botId, newStatus);
+        setBotStatus(botId, newStatus);
         
-        // Aktualisiere die lokale Liste
+        const newBotStatuses = {...botStatuses};
+        newBotStatuses[normalizeBotId(botId) as BotId] = newStatus;
+        setBotStatuses(newBotStatuses);
+        
         setConnectedBots(prevBots => 
           prevBots.map(b => 
             b.id === botId ? { ...b, status: newStatus } : b
@@ -542,7 +545,7 @@ const Dashboard: FC = () => {
                               ? 'bg-yellow-600 hover:bg-yellow-700' 
                               : 'bg-green-600 hover:bg-green-700'
                           } transition-colors ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                          onClick={() => toggleBotStatus(bot.id)}
+                          onClick={() => toggleBotStatusHandler(bot.id)}
                           disabled={isLoading}
                         >
                           {isLoading ? 'Processing...' : bot.status === 'active' ? 'Pause' : 'Resume'}
