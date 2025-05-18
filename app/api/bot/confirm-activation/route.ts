@@ -11,19 +11,35 @@ const connection = new Connection(SOLANA_RPC_URL, {
   commitment: 'confirmed'
 });
 
+// Hilfsfunktion zur Normalisierung von Bot-IDs
+function normalizeBotId(botId: string): string {
+  // Zuordnungstabelle für Kurzform zu Langform
+  const idMapping: Record<string, string> = {
+    'vol-tracker': 'volume-tracker',
+    'trend-surfer': 'trend-surfer', // Bereits gleich
+    'arb-finder': 'dip-hunter', // arb-finder ist eine alternative ID für dip-hunter
+  };
+
+  // Wenn eine Kurzform-ID vorliegt, in Langform umwandeln
+  return idMapping[botId] || botId;
+}
+
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
   try {
-    const { botId, signedTransaction, action, isMockMode: requestMockMode } = await request.json();
+    const { botId: rawBotId, signedTransaction, action, isMockMode: requestMockMode } = await request.json();
+
+    // Normalisiere die Bot-ID
+    const botId = normalizeBotId(rawBotId);
 
     // Prüfe, ob wir im Mock-Modus sind (entweder vom Request oder global)
     const isMockMode = requestMockMode || getMockModeStatus();
     
-    console.log(`Bot-Aktivierung bestätigen für Bot ${botId}, Mock-Modus: ${isMockMode}`);
+    console.log(`Bot-Aktivierung bestätigen für Bot ${rawBotId} (${botId}), Mock-Modus: ${isMockMode}`);
 
     // Validiere Eingaben
-    if (!botId || !signedTransaction) {
+    if (!rawBotId || !signedTransaction) {
       return NextResponse.json({ error: 'Missing parameters - botId and signedTransaction are required' }, { status: 400 });
     }
 
@@ -36,8 +52,8 @@ export async function POST(request: Request) {
         success: true,
         signature: "MockSignature" + Date.now(),
         message: isDeactivating 
-          ? `Bot ${botId} wurde erfolgreich deaktiviert (Mock)` 
-          : `Bot ${botId} wurde erfolgreich aktiviert (Mock)`,
+          ? `Bot ${rawBotId} wurde erfolgreich deaktiviert (Mock)` 
+          : `Bot ${rawBotId} wurde erfolgreich aktiviert (Mock)`,
         status: isDeactivating ? 'inactive' : 'active',
         isActive: !isDeactivating,
         isMockMode: true
@@ -63,8 +79,8 @@ export async function POST(request: Request) {
         success: true,
         signature: "DBErrorSignature" + Date.now(),
         message: isDeactivating 
-          ? `Bot ${botId} wurde (simuliert) deaktiviert aufgrund von Datenbankfehlern` 
-          : `Bot ${botId} wurde (simuliert) aktiviert aufgrund von Datenbankfehlern`,
+          ? `Bot ${rawBotId} wurde (simuliert) deaktiviert aufgrund von Datenbankfehlern` 
+          : `Bot ${rawBotId} wurde (simuliert) aktiviert aufgrund von Datenbankfehlern`,
         status: isDeactivating ? 'inactive' : 'active',
         isActive: !isDeactivating,
         dbError: true
@@ -109,11 +125,11 @@ export async function POST(request: Request) {
             console.error('Fehler beim Aktualisieren des Bot-Status in der Datenbank:', dbUpdateError);
             // Trotz DB-Fehler können wir eine erfolgreiche Antwort senden
             result = {
-              botId,
+              botId: rawBotId,
               status: isDeactivating ? 'inactive' : 'active',
               message: isDeactivating 
-                ? `Bot ${botId} wurde deaktiviert (Blockchain OK, DB-Fehler)` 
-                : `Bot ${botId} wurde aktiviert (Blockchain OK, DB-Fehler)`
+                ? `Bot ${rawBotId} wurde deaktiviert (Blockchain OK, DB-Fehler)` 
+                : `Bot ${rawBotId} wurde aktiviert (Blockchain OK, DB-Fehler)`
             };
           }
 

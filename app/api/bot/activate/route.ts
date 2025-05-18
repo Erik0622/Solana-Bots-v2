@@ -14,6 +14,19 @@ const connection = new Connection(SOLANA_RPC_URL, {
   commitment: 'confirmed'
 });
 
+// Hilfsfunktion zur Normalisierung von Bot-IDs
+function normalizeBotId(botId: string): string {
+  // Zuordnungstabelle für Kurzform zu Langform
+  const idMapping: Record<string, string> = {
+    'vol-tracker': 'volume-tracker',
+    'trend-surfer': 'trend-surfer', // Bereits gleich
+    'arb-finder': 'dip-hunter', // arb-finder ist eine alternative ID für dip-hunter
+  };
+
+  // Wenn eine Kurzform-ID vorliegt, in Langform umwandeln
+  return idMapping[botId] || botId;
+}
+
 // Definiere Typ für IDL
 interface TradingBotIdl {
   version: string;
@@ -78,12 +91,21 @@ export const dynamic = 'force-dynamic'; // Diese Route dynamisch machen
 
 export async function POST(request: Request) {
   try {
-    const { botId, walletAddress, riskPercentage, action, botType } = await request.json();
+    const { botId: rawBotId, walletAddress, riskPercentage, action, botType } = await request.json();
     
-    console.log("Bot Aktivierung angefordert:", { botId, walletAddress, action, botType });
+    // Normalisiere die Bot-ID
+    const botId = normalizeBotId(rawBotId);
+    
+    console.log("Bot Aktivierung angefordert:", { 
+      originalBotId: rawBotId, 
+      normalizedBotId: botId,
+      walletAddress, 
+      action, 
+      botType 
+    });
 
     // Validiere Eingaben
-    if (!botId || !walletAddress) {
+    if (!rawBotId || !walletAddress) {
       return NextResponse.json({ error: 'Fehlende Parameter: botId und walletAddress sind erforderlich' }, { status: 400 });
     }
 
@@ -94,12 +116,14 @@ export async function POST(request: Request) {
     let strategyType;
     switch (botType) {
       case 'volume-tracker':
+      case 'vol-tracker':
         strategyType = BotType.VOLUME_TRACKER;
         break;
       case 'trend-surfer':
         strategyType = BotType.TREND_SURFER;
         break;
       case 'dip-hunter':
+      case 'arb-finder':
         strategyType = BotType.DIP_HUNTER;
         break;
       default:

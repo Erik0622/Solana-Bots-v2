@@ -6,11 +6,27 @@ export const dynamic = 'force-dynamic';
 
 const prisma = new PrismaClient();
 
+// Hilfsfunktion zur Normalisierung von Bot-IDs
+function normalizeBotId(botId: string): string {
+  // Zuordnungstabelle für Kurzform zu Langform
+  const idMapping: Record<string, string> = {
+    'vol-tracker': 'volume-tracker',
+    'trend-surfer': 'trend-surfer', // Bereits gleich
+    'arb-finder': 'dip-hunter', // arb-finder ist eine alternative ID für dip-hunter
+  };
+
+  // Wenn eine Kurzform-ID vorliegt, in Langform umwandeln
+  return idMapping[botId] || botId;
+}
+
 export async function POST(request: Request) {
   try {
-    const { botId, wallet, action } = await request.json();
+    const { botId: rawBotId, wallet, action } = await request.json();
+    
+    // Normalisiere die Bot-ID
+    const botId = normalizeBotId(rawBotId);
 
-    if (!botId || !wallet || !action) {
+    if (!rawBotId || !wallet || !action) {
       return NextResponse.json({ error: 'Fehlende Parameter' }, { status: 400 });
     }
 
@@ -24,7 +40,7 @@ export async function POST(request: Request) {
       bot = await prisma.bot.create({
         data: {
           id: botId,
-          name: getBotNameFromId(botId),
+          name: getBotNameFromId(rawBotId),
           walletAddress: wallet,
           riskPercentage: 15, // Standardrisiko
           strategyType: botId, // Verwende ID als Strategie-Typ
@@ -53,7 +69,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      botId,
+      botId: rawBotId, // Gib die Original-ID zurück
       status: newStatus ? 'active' : 'paused',
       message: result.message
     });
@@ -67,10 +83,12 @@ export async function POST(request: Request) {
 function getBotNameFromId(botId: string): string {
   switch (botId) {
     case 'volume-tracker':
+    case 'vol-tracker':
       return 'Volume Tracker';
     case 'trend-surfer':
       return 'Trend Surfer';
     case 'dip-hunter':
+    case 'arb-finder':
       return 'Dip Hunter';
     default:
       return 'Trading Bot';
