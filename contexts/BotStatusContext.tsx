@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 
 type BotStatus = 'active' | 'paused';
 type BotStatusMap = Record<string, BotStatus>;
@@ -10,129 +10,183 @@ interface BotStatusContextType {
   updateBotStatus: (botId: string, status: BotStatus) => void;
   fetchAllBotStatuses: (walletAddress?: string) => Promise<void>;
   isBotActive: (botId: string) => boolean;
+  isClientHydrated: boolean;
 }
 
 const BotStatusContext = createContext<BotStatusContextType | undefined>(undefined);
 
+// DEFINE KNOWN BOT IDS (use normalized versions)
+// Diese sollten idealerweise aus einer zentralen Konfiguration kommen oder dynamisch, aber stabil geladen werden.
+const KNOWN_BOT_IDS = ['volume-tracker', 'trend-surfer', 'dip-hunter'];
+
 // Normalisiere Bot-IDs, um eine einheitliche Darstellung sicherzustellen
+// Diese Funktion muss hier bleiben, da sie vor dem Context existiert.
 function normalizeBotId(botId: string): string {
-  // Zuordnungstabelle für Kurzform zu Langform
   const idMapping: Record<string, string> = {
     'vol-tracker': 'volume-tracker',
-    'trend-surfer': 'trend-surfer', // Bereits gleich
-    'arb-finder': 'dip-hunter', // arb-finder ist eine alternative ID für dip-hunter
+    'volume-tracker': 'volume-tracker', // explizit für Klarheit
+    'trend-surfer': 'trend-surfer',
+    'momentum-bot': 'trend-surfer', // Alias für trend-surfer
+    'arb-finder': 'dip-hunter',
+    'dip-hunter': 'dip-hunter' // explizit für Klarheit
   };
-
-  // Wenn eine Kurzform-ID vorliegt, in Langform umwandeln
-  return idMapping[botId] || botId;
+  return idMapping[botId.toLowerCase()] || botId; // Immer Kleinschreibung für den Key verwenden
 }
 
+// Helper to create default statuses
+const getDefaultStatuses = (): BotStatusMap => {
+  const statuses: BotStatusMap = {};
+  KNOWN_BOT_IDS.forEach(id => {
+    statuses[normalizeBotId(id)] = 'paused'; // Stelle sicher, dass normalisierte IDs verwendet werden
+  });
+  return statuses;
+};
+
 export function BotStatusProvider({ children }: { children: React.ReactNode }) {
-  const [botStatuses, setBotStatuses] = useState<BotStatusMap>({});
-  const [isInitialized, setIsInitialized] = useState(false);
-
-  // Normalisiere den Status im localStorage
-  const normalizeStoredStatuses = (storedStatuses: Record<string, BotStatus>): BotStatusMap => {
-    const normalized: BotStatusMap = {};
-    
-    Object.entries(storedStatuses).forEach(([botId, status]) => {
-      const normalizedId = normalizeBotId(botId);
-      normalized[normalizedId] = status;
-    });
-    
-    return normalized;
-  };
-
-  // Beim ersten Rendern Status aus localStorage laden
-  useEffect(() => {
-    try {
-      if (typeof window !== 'undefined') {
+  const [botStatuses, setBotStatuses] = useState<BotStatusMap>(() => {
+    if (typeof window !== 'undefined') {
+      try {
         const savedStatus = localStorage.getItem('botStatuses');
         if (savedStatus) {
-          console.log('Lade Bot-Status aus localStorage:', savedStatus);
+          console.log('Initial load from localStorage for useState:', savedStatus);
           const parsed = JSON.parse(savedStatus);
-          
-          // Normalisiere alle IDs beim Laden
-          const normalizedStatuses = normalizeStoredStatuses(parsed);
-          setBotStatuses(normalizedStatuses);
+          const normalized: BotStatusMap = {};
+          let allKnownBotsCovered = true;
+          // Normalisiere und validiere geladene Status
+          Object.entries(parsed).forEach(([key, value]) => {
+            const normId = normalizeBotId(key);
+            if (KNOWN_BOT_IDS.includes(normId)) {
+              normalized[normId] = value as BotStatus;
+            }
+          });
+          // Stelle sicher, dass alle bekannten Bots einen Status haben
+          KNOWN_BOT_IDS.forEach(id => {
+            if (normalized[id] === undefined) {
+              normalized[id] = 'paused'; // Default für fehlende bekannte Bots
+              allKnownBotsCovered = false; 
+            }
+          });
+          // Nur zurückgeben, wenn alle bekannten Bots abgedeckt sind oder es gültig aussieht
+          // Dies verhindert das Zurückgeben eines leeren oder unvollständigen Objekts, falls localStorage korrupt ist.
+          if (Object.keys(normalized).length > 0 && allKnownBotsCovered) {
+            return normalized;
+          }
         }
-        setIsInitialized(true);
+      } catch (error) {
+        console.error('Fehler beim Laden von localStorage für Initialwert:', error);
       }
-    } catch (error) {
-      console.error('Fehler beim Laden der Bot-Status aus localStorage:', error);
-      setIsInitialized(true);
     }
+    console.log('Initial load: using default statuses for SSR or empty/invalid localStorage.');
+    return getDefaultStatuses();
+  });
+
+  const [isClientHydrated, setIsClientHydrated] = useState(false);
+
+  useEffect(() => {
+    setIsClientHydrated(true);
+    console.log('BotStatusProvider: Client hydrated. Initial statuses from useState:', botStatuses);
+    // Optional: Erneutes Laden/Validieren aus localStorage hier, falls nötig.
+    // Zum Beispiel, wenn `useState`-Initialisierung nicht ausreicht.
+    // Fürs Erste verlassen wir uns auf die `useState`-Initialisierungslogik.
   }, []);
 
-  // Bei Änderungen im Status in localStorage speichern
+  // Speichere in localStorage, wenn sich botStatuses ändert UND Client hydriert ist
   useEffect(() => {
-    if (isInitialized && typeof window !== 'undefined') {
-      console.log('Speichere Bot-Status in localStorage:', JSON.stringify(botStatuses));
+    if (isClientHydrated && typeof window !== 'undefined') {
+      console.log('Speichere Bot-Status in localStorage (isClientHydrated):', JSON.stringify(botStatuses));
       localStorage.setItem('botStatuses', JSON.stringify(botStatuses));
     }
-  }, [botStatuses, isInitialized]);
+  }, [botStatuses, isClientHydrated]);
 
-  const updateBotStatus = (botId: string, status: BotStatus) => {
-    // Normalisiere die Bot-ID bei jedem Update
+  const updateBotStatus = useCallback((botId: string, status: BotStatus) => {
     const normalizedId = normalizeBotId(botId);
-    console.log(`BotStatusContext: Status für Bot ${normalizedId} aktualisiert auf ${status}`);
-    
-    setBotStatuses(prev => ({
-      ...prev,
-      [normalizedId]: status
-    }));
-  };
+    if (!KNOWN_BOT_IDS.includes(normalizedId)) {
+      console.warn(`BotStatusContext: Versuch, unbekannte botId zu aktualisieren: ${botId} (normalisiert: ${normalizedId})`);
+      return;
+    }
+    console.log(`BotStatusContext: updateBotStatus für ${normalizedId} zu ${status}`);
+    setBotStatuses(prev => {
+      if (prev[normalizedId] === status) return prev;
+      return { ...prev, [normalizedId]: status };
+    });
+  }, []); // normalizeBotId ist eine Top-Level-Funktion, KNOWN_BOT_IDS ist ein Top-Level const
 
-  const isBotActive = (botId: string): boolean => {
-    // Normalisiere die Bot-ID bei jeder Abfrage
-    const normalizedId = normalizeBotId(botId);
-    return botStatuses[normalizedId] === 'active';
-  };
-
-  const fetchAllBotStatuses = async (walletAddress?: string) => {
-    if (!walletAddress) return;
-
+  const fetchAllBotStatuses = useCallback(async (walletAddress?: string) => {
+    if (!walletAddress || !isClientHydrated) {
+      console.log('fetchAllBotStatuses: Übersprungen (kein Wallet / nicht hydriert / kein PublicKey)');
+      return;
+    }
+    console.log('fetchAllBotStatuses: Abrufen für Wallet', walletAddress);
     try {
-      // Cache-Busting durch Timestamp
       const timestamp = Date.now();
       const response = await fetch(`/api/bots?wallet=${walletAddress}&_=${timestamp}`, {
-        headers: {
-          'Pragma': 'no-cache',
-          'Cache-Control': 'no-cache, no-store, must-revalidate'
-        },
+        headers: { 'Pragma': 'no-cache', 'Cache-Control': 'no-cache, no-store, must-revalidate' },
         cache: 'no-store'
       });
 
       if (!response.ok) {
-        console.error('Fehler beim Abrufen der Bot-Status:', response.status);
+        console.error('Fehler beim Abrufen der Bot-Status API:', response.status, await response.text());
         return;
       }
-
       const data = await response.json();
-      if (Array.isArray(data)) {
-        // Update botStatuses basierend auf der API-Antwort
-        const newStatuses: BotStatusMap = {};
-        data.forEach(bot => {
-          // Normalisiere die Bot-ID von der API
-          const normalizedId = normalizeBotId(bot.id);
-          newStatuses[normalizedId] = bot.status;
-        });
 
-        // Nur aktualisieren, wenn es tatsächlich Änderungen gibt
-        setBotStatuses(prev => {
-          const hasChanges = Object.keys(newStatuses).some(
-            id => newStatuses[id] !== prev[id]
-          );
-          return hasChanges ? { ...prev, ...newStatuses } : prev;
+      if (Array.isArray(data)) {
+        console.log('fetchAllBotStatuses: API Antwortdaten:', data);
+        setBotStatuses(prevLocalStatuses => {
+          const newStatusesFromApi: BotStatusMap = {};
+          let hasRelevantChanges = false;
+
+          data.forEach(botFromApi => {
+            const normalizedId = normalizeBotId(botFromApi.id);
+            if (KNOWN_BOT_IDS.includes(normalizedId)) {
+              newStatusesFromApi[normalizedId] = botFromApi.status as BotStatus;
+            }
+          });
+
+          const nextState = { ...prevLocalStatuses }; // Kopie des aktuellen lokalen Zustands
+
+          KNOWN_BOT_IDS.forEach(botId => {
+            const apiStatus = newStatusesFromApi[botId]; // Status von API für diesen Bot
+            const localStatus = prevLocalStatuses[botId] || 'paused'; // Aktueller lokaler Status, default 'paused'
+
+            if (apiStatus !== undefined) { // Wenn API einen Status für diesen Bot geliefert hat
+              if (localStatus !== apiStatus) {
+                nextState[botId] = apiStatus;
+                hasRelevantChanges = true;
+              }
+            } else { // API hat diesen Bot nicht geliefert
+              // Behalte lokalen Status oder setze auf 'paused', falls er undefiniert war
+              if (nextState[botId] === undefined ) {
+                 nextState[botId] = 'paused';
+                 // Nur als Änderung markieren, wenn der lokale Status nicht schon 'paused' war
+                 if (localStatus !== 'paused') hasRelevantChanges = true;
+              }
+            }
+          });
+          
+          if (hasRelevantChanges) {
+            console.log('fetchAllBotStatuses: Wende API-Status an:', nextState);
+            return nextState;
+          }
+          console.log('fetchAllBotStatuses: Keine relevanten Änderungen durch API-Daten.');
+          return prevLocalStatuses;
         });
+      } else {
+        console.warn('fetchAllBotStatuses: API-Antwort war kein Array:', data);
+         // Hier könnte man entscheiden, den lokalen Status nicht zu ändern oder auf Default zurückzusetzen
       }
     } catch (error) {
-      console.error('Fehler beim Abrufen der Bot-Status:', error);
+      console.error('Fehler beim Abrufen der Bot-Status (Exception):', error);
     }
-  };
+  }, [isClientHydrated]); // normalizeBotId ist stabil
+
+  const isBotActive = useCallback((botId: string): boolean => {
+    const normalizedId = normalizeBotId(botId);
+    return botStatuses[normalizedId] === 'active';
+  }, [botStatuses]); // Hängt von botStatuses ab
 
   return (
-    <BotStatusContext.Provider value={{ botStatuses, updateBotStatus, fetchAllBotStatuses, isBotActive }}>
+    <BotStatusContext.Provider value={{ botStatuses, updateBotStatus, fetchAllBotStatuses, isBotActive, isClientHydrated }}>
       {children}
     </BotStatusContext.Provider>
   );
