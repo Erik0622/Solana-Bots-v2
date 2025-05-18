@@ -81,10 +81,6 @@ const BotCard: FC<BotCardProps> = ({
       }
       
       const data = await response.json();
-      if (data.error) {
-        console.warn(`Fehler vom API beim Abrufen des Bot-Status (${id}): ${data.error}`);
-        return;
-      }
       const botStatus = data.status;
       
       // Nur Status aktualisieren, wenn er sich geändert hat und gültig ist

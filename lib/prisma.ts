@@ -15,8 +15,8 @@ const databaseUrl = process.env.DATABASE_URL ||
 // Alternative/lokale Datenbank-URL als Fallback
 const fallbackUrl = "postgresql://postgres:postgres@localhost:5432/postgres";
 
-// Flag für Mock-Mode
-export const isMockMode = process.env.MOCK_MODE === 'true' || false;
+// Flag für Mock-Mode - Standardmäßig aktiviert für Entwicklung
+export const isMockMode = process.env.MOCK_MODE !== 'false';
 
 // PrismaClient ist an Ihre Datenbank angepasst
 let prisma: PrismaClient;

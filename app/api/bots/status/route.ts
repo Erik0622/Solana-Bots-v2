@@ -67,9 +67,9 @@ export async function GET(request: Request) {
     } catch (dbError) {
       console.error(`Datenbankfehler beim Abrufen des Status für Bot ${botId}:`, dbError);
       
-      // Bei Datenbankfehlern einen Standardstatus zurückgeben
+      // Bei Datenbankfehlern einen Standardstatus zurückgeben - OHNE error-Feld
       return NextResponse.json(
-        { botId: rawBotId, status: 'paused', error: "Datenbankfehler, verwende Standardstatus" },
+        { botId: rawBotId, status: 'paused' },
         { status: 200, headers }
       );
     }
@@ -83,9 +83,9 @@ export async function GET(request: Request) {
       botId = url.searchParams.get('botId') || 'unknown';
     } catch {}
     
-    // Selbst bei schwerwiegendem Fehler einen Standardstatus zurückgeben
+    // Selbst bei schwerwiegendem Fehler einen Standardstatus zurückgeben - OHNE error-Feld
     return NextResponse.json(
-      { botId, status: 'paused', error: "Kritischer Fehler, verwende Standardstatus" },
+      { botId, status: 'paused' },
       { status: 200, headers }
     );
   }
