@@ -170,10 +170,13 @@ const Dashboard: FC = () => {
       
       const currentStatuses = getAllBotStatus();
       
-      const updatedBots = data.map((bot: any) => ({
-        ...bot,
-        status: currentStatuses[bot.id] || 'paused'
-      }));
+      const updatedBots = data.map((bot: any) => {
+        const normalizedId = normalizeBotId(bot.id);
+        return {
+          ...bot,
+          status: currentStatuses[normalizedId] || 'paused'
+        };
+      });
       
       setConnectedBots(updatedBots); 
     } catch (error) {
