@@ -29,6 +29,73 @@ let persistentBotStatuses = new Map();
 // Speichere die Wallet-Provider für jeden Bot
 const walletProviders = new Map();
 
+// Hilfsfunktion zur Synchronisierung des Bot-Status in localStorage
+export function initBotStatuses() {
+  try {
+    if (typeof window !== 'undefined') {
+      // Lade bestehende Status aus localStorage
+      const savedStatus = localStorage.getItem('botStatuses');
+      if (savedStatus) {
+        const parsed = JSON.parse(savedStatus);
+        Object.entries(parsed).forEach(([botId, isActive]) => {
+          persistentBotStatuses.set(botId, isActive);
+        });
+      }
+    }
+  } catch (error) {
+    console.error('Fehler beim Initialisieren der Bot-Status:', error);
+  }
+}
+
+// Lade initiale Status
+if (typeof window !== 'undefined') {
+  initBotStatuses();
+}
+
+// Prüfe, ob ein Bot aktiv ist (auch über Navigation hinweg)
+export function isBotActive(botId: string): boolean {
+  // Synchronisiere mit localStorage
+  try {
+    if (typeof window !== 'undefined') {
+      const savedStatus = localStorage.getItem('botStatuses');
+      if (savedStatus) {
+        const parsed = JSON.parse(savedStatus);
+        if (botId in parsed) {
+          // Update lokale Map vom localStorage
+          persistentBotStatuses.set(botId, parsed[botId]);
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('Fehler beim Lesen des Bot-Status aus localStorage:', e);
+  }
+  
+  return persistentBotStatuses.get(botId) === true;
+}
+
+// Bot-Status aktualisieren (in der Map und im localStorage)
+export function updateBotStatus(botId: string, isActive: boolean) {
+  // Setze persistenten Bot-Status
+  persistentBotStatuses.set(botId, isActive);
+  
+  // Speichere in localStorage für Client-seitige Persistenz
+  try {
+    if (typeof window !== 'undefined') {
+      // Aktuelles Status-Objekt aus localStorage lesen
+      const currentSavedStatuses = localStorage.getItem('botStatuses');
+      const statusObj = currentSavedStatuses ? JSON.parse(currentSavedStatuses) : {};
+      
+      // Status aktualisieren
+      statusObj[botId] = isActive;
+      
+      // Zurück in localStorage speichern
+      localStorage.setItem('botStatuses', JSON.stringify(statusObj));
+    }
+  } catch (error) {
+    console.error('Fehler beim Speichern des Bot-Status:', error);
+  }
+}
+
 // Bot-Strategie-Typen
 export enum BotType {
   VOLUME_TRACKER = 'volume-tracker',
@@ -94,11 +161,6 @@ function createBot(botType: string, provider: AnchorProvider, marketAddress: str
 export function registerWalletForBot(botId: string, wallet: any) {
   walletProviders.set(botId, wallet);
   console.log(`Wallet für Bot ${botId} registriert`);
-}
-
-// Prüfe, ob ein Bot aktiv ist (auch über Navigation hinweg)
-export function isBotActive(botId: string): boolean {
-  return persistentBotStatuses.get(botId) === true;
 }
 
 export async function startTradingBot(botId: string, config: BotConfig = {}) {
@@ -184,7 +246,7 @@ export async function startTradingBot(botId: string, config: BotConfig = {}) {
       }
   
       // Markiere den Bot als aktiv im persistenten Speicher
-      persistentBotStatuses.set(botId, true);
+      updateBotStatus(botId, true);
   
       // Starte Trading-Loop nur, wenn noch keiner läuft
       startTradingLoop(botId, bot);
@@ -211,7 +273,7 @@ function startTradingLoop(botId: string, bot: PrismaBot | DefaultBot) {
   const intervalId = setInterval(async () => {
     try {
       // Prüfe ob Bot noch aktiv ist
-      let isActive = persistentBotStatuses.get(botId) === true;
+      let isActive = isBotActive(botId);
       
       try {
         const updatedBot = await prisma.bot.findUnique({
@@ -220,7 +282,7 @@ function startTradingLoop(botId: string, bot: PrismaBot | DefaultBot) {
         
         // Update auch den persistenten Status basierend auf der Datenbank
         isActive = updatedBot?.isActive || false;
-        persistentBotStatuses.set(botId, isActive);
+        updateBotStatus(botId, isActive);
         
       } catch (dbError) {
         console.warn('Datenbankfehler bei Aktivitätsprüfung, verwende Cache:', dbError);
@@ -238,7 +300,7 @@ function startTradingLoop(botId: string, bot: PrismaBot | DefaultBot) {
       if (!botInstance) {
         console.error(`Bot-Instanz ${botId} nicht gefunden, stoppe Trading-Loop ${loopId}`);
         clearInterval(intervalId);
-        persistentBotStatuses.set(botId, false);
+        updateBotStatus(botId, false);
         return;
       }
 
@@ -309,7 +371,7 @@ export async function stopTradingBot(botId: string) {
     walletProviders.delete(botId);
     
     // Setze persistenten Bot-Status
-    persistentBotStatuses.set(botId, false);
+    updateBotStatus(botId, false);
     
     // Aktualisiere Bot-Status in der Datenbank
     try {

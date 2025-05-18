@@ -74,7 +74,17 @@ const BotCard: FC<BotCardProps> = ({
     if (!connected || !publicKey) return;
     
     try {
-      const response = await fetch(`/api/bots/status?botId=${id}`);
+      // Verwende Cache-Busting-Parameter und erzwinge keine Cache-Antworten
+      const timestamp = Date.now(); // Cache-Busting-Timestamp
+      const response = await fetch(`/api/bots/status?botId=${id}&_=${timestamp}`, {
+        headers: {
+          'Pragma': 'no-cache',
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
+        },
+        cache: 'no-store',
+        next: { revalidate: 0 }
+      });
+      
       if (!response.ok) {
         console.warn(`Konnte Bot-Status für ${id} nicht abrufen: ${response.status}`);
         return;

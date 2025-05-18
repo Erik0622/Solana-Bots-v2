@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import prisma from '@/lib/prisma';
 import { startTradingBot, stopTradingBot } from '@/lib/trading/bot';
 
+// Alle Bot-Anfragen dynamisch machen
 export const dynamic = 'force-dynamic';
-
-const prisma = new PrismaClient();
+export const fetchCache = 'force-no-store';
+export const revalidate = 0;
 
 // Hilfsfunktion zur Normalisierung von Bot-IDs
 function normalizeBotId(botId: string): string {
@@ -20,6 +21,13 @@ function normalizeBotId(botId: string): string {
 }
 
 export async function POST(request: Request) {
+  // No-Cache Headers für alle Antworten setzen
+  const headers = {
+    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+    'Pragma': 'no-cache',
+    'Expires': '0'
+  };
+
   try {
     const { botId: rawBotId, wallet, action } = await request.json();
     
@@ -27,7 +35,7 @@ export async function POST(request: Request) {
     const botId = normalizeBotId(rawBotId);
 
     if (!rawBotId || !wallet || !action) {
-      return NextResponse.json({ error: 'Fehlende Parameter' }, { status: 400 });
+      return NextResponse.json({ error: 'Fehlende Parameter' }, { status: 400, headers });
     }
 
     // Hole Bot aus der Datenbank
@@ -61,6 +69,7 @@ export async function POST(request: Request) {
 
     // Starte oder stoppe den Bot
     let result;
+    console.log(`Toggle für Bot ${botId}: Neuer Status = ${newStatus ? 'active' : 'inactive'}`);
     if (newStatus) {
       result = await startTradingBot(botId);
     } else {
@@ -72,10 +81,13 @@ export async function POST(request: Request) {
       botId: rawBotId, // Gib die Original-ID zurück
       status: newStatus ? 'active' : 'paused',
       message: result.message
-    });
+    }, { headers });
   } catch (error) {
     console.error('Error toggling bot status:', error);
-    return NextResponse.json({ error: 'Fehler beim Ändern des Bot-Status' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Fehler beim Ändern des Bot-Status' }, 
+      { status: 500, headers }
+    );
   }
 }
 

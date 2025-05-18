@@ -141,7 +141,16 @@ const Dashboard: FC = () => {
   const fetchConnectedBots = async () => {
     if (!connected || !publicKey) return;
     try {
-      const response = await fetch(`/api/bots?wallet=${publicKey.toString()}`);
+      const timestamp = Date.now();
+      const response = await fetch(`/api/bots?wallet=${publicKey.toString()}&_=${timestamp}`, {
+        headers: {
+          'Pragma': 'no-cache',
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
+        },
+        cache: 'no-store',
+        next: { revalidate: 0 }
+      });
+      
       if (!response.ok) {
         console.error('Failed to fetch bots', response.status);
         return;

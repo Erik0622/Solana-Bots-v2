@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server';
 import prisma, { getMockModeStatus } from '@/lib/prisma';
+import { isBotActive } from '@/lib/trading/bot';
 
 export const dynamic = 'force-dynamic'; // Diese Route dynamisch machen
+export const fetchCache = 'force-no-store';
+export const revalidate = 0;
 
 // Hilfsfunktion zur Normalisierung von Bot-IDs
 function normalizeBotId(botId: string): string {
@@ -52,6 +55,9 @@ export async function GET(request: Request) {
       );
     }
 
+    // Prüfe zuerst den lokalen in-memory Status (persistentBotStatuses)
+    const locallyActive = isBotActive(botId);
+    
     // Versuche, den Status aus der Datenbank zu holen
     try {
       const bot = await prisma.bot.findUnique({
@@ -59,11 +65,26 @@ export async function GET(request: Request) {
         select: { isActive: true }
       });
 
-      const status = (bot?.isActive || false) ? 'active' : 'paused';
-      return NextResponse.json(
-        { botId: rawBotId, status },
-        { headers }
-      );
+      // Wenn der Bot in der Datenbank existiert, verwende diesen Status
+      if (bot) {
+        const status = (bot.isActive || false) ? 'active' : 'paused';
+        return NextResponse.json(
+          { botId: rawBotId, status },
+          { headers }
+        );
+      } else if (locallyActive) {
+        // Wenn der Bot nicht in der DB ist, aber lokal als aktiv markiert ist
+        return NextResponse.json(
+          { botId: rawBotId, status: 'active' },
+          { headers }
+        );
+      } else {
+        // Standardwert, wenn weder in DB noch lokal als aktiv markiert
+        return NextResponse.json(
+          { botId: rawBotId, status: 'paused' },
+          { headers }
+        );
+      }
     } catch (dbError) {
       console.error(`Datenbankfehler beim Abrufen des Status für Bot ${botId}:`, dbError);
       
