@@ -10,13 +10,13 @@ declare global {
 // Konfiguriere die Prisma URL für die Datenbankverbindung mit Supabase
 // Verwende eine zugänglichere Datenbank-URL
 const databaseUrl = process.env.DATABASE_URL || 
-  "postgresql://postgres.ssxbtzoygnvpzuogpwbk:Pieseczek0616@db.ssxbtzoygnvpzuogpwbk.supabase.co:5432/postgres";
+  "postgresql://postgres.ssxbtzoygnvpzuogpwbk:S27BqCMHOszfAVtU@aws-0-eu-central-1.pooler.supabase.com:6543/postgres";
 
 // Alternative/lokale Datenbank-URL als Fallback
 const fallbackUrl = "postgresql://postgres:postgres@localhost:5432/postgres";
 
-// Flag für Mock-Mode - Standardmäßig aktiviert für Entwicklung
-export const isMockMode = process.env.MOCK_MODE !== 'false';
+// Flag für Mock-Mode - Nur aktivieren, wenn explizit gesetzt oder in Fallback
+export const isMockMode = process.env.MOCK_MODE === 'true' || false;
 
 // PrismaClient ist an Ihre Datenbank angepasst
 let prisma: PrismaClient;
