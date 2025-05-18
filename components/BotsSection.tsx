@@ -20,7 +20,7 @@ const BotsSection: FC = () => {
     if (publicKey) {
       fetchAllBotStatuses(publicKey.toString());
     }
-  }, [publicKey, fetchAllBotStatuses]);
+  }, [publicKey]);
   
   // Handle bot status change
   const handleStatusChange = (id: string, status: 'active' | 'paused') => {

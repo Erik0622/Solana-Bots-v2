@@ -75,7 +75,7 @@ const Dashboard: FC = () => {
         clearInterval(botsListInterval);
       };
     }
-  }, [connected, publicKey, timeframe, fetchAllBotStatuses]);
+  }, [connected, publicKey, timeframe]);
 
   useEffect(() => {
     const localFetchBalance = async () => {

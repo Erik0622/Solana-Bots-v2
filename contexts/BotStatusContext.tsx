@@ -14,9 +14,34 @@ interface BotStatusContextType {
 
 const BotStatusContext = createContext<BotStatusContextType | undefined>(undefined);
 
+// Normalisiere Bot-IDs, um eine einheitliche Darstellung sicherzustellen
+function normalizeBotId(botId: string): string {
+  // Zuordnungstabelle für Kurzform zu Langform
+  const idMapping: Record<string, string> = {
+    'vol-tracker': 'volume-tracker',
+    'trend-surfer': 'trend-surfer', // Bereits gleich
+    'arb-finder': 'dip-hunter', // arb-finder ist eine alternative ID für dip-hunter
+  };
+
+  // Wenn eine Kurzform-ID vorliegt, in Langform umwandeln
+  return idMapping[botId] || botId;
+}
+
 export function BotStatusProvider({ children }: { children: React.ReactNode }) {
   const [botStatuses, setBotStatuses] = useState<BotStatusMap>({});
   const [isInitialized, setIsInitialized] = useState(false);
+
+  // Normalisiere den Status im localStorage
+  const normalizeStoredStatuses = (storedStatuses: Record<string, BotStatus>): BotStatusMap => {
+    const normalized: BotStatusMap = {};
+    
+    Object.entries(storedStatuses).forEach(([botId, status]) => {
+      const normalizedId = normalizeBotId(botId);
+      normalized[normalizedId] = status;
+    });
+    
+    return normalized;
+  };
 
   // Beim ersten Rendern Status aus localStorage laden
   useEffect(() => {
@@ -25,7 +50,11 @@ export function BotStatusProvider({ children }: { children: React.ReactNode }) {
         const savedStatus = localStorage.getItem('botStatuses');
         if (savedStatus) {
           console.log('Lade Bot-Status aus localStorage:', savedStatus);
-          setBotStatuses(JSON.parse(savedStatus));
+          const parsed = JSON.parse(savedStatus);
+          
+          // Normalisiere alle IDs beim Laden
+          const normalizedStatuses = normalizeStoredStatuses(parsed);
+          setBotStatuses(normalizedStatuses);
         }
         setIsInitialized(true);
       }
@@ -44,15 +73,20 @@ export function BotStatusProvider({ children }: { children: React.ReactNode }) {
   }, [botStatuses, isInitialized]);
 
   const updateBotStatus = (botId: string, status: BotStatus) => {
-    console.log(`BotStatusContext: Status für Bot ${botId} aktualisiert auf ${status}`);
+    // Normalisiere die Bot-ID bei jedem Update
+    const normalizedId = normalizeBotId(botId);
+    console.log(`BotStatusContext: Status für Bot ${normalizedId} aktualisiert auf ${status}`);
+    
     setBotStatuses(prev => ({
       ...prev,
-      [botId]: status
+      [normalizedId]: status
     }));
   };
 
   const isBotActive = (botId: string): boolean => {
-    return botStatuses[botId] === 'active';
+    // Normalisiere die Bot-ID bei jeder Abfrage
+    const normalizedId = normalizeBotId(botId);
+    return botStatuses[normalizedId] === 'active';
   };
 
   const fetchAllBotStatuses = async (walletAddress?: string) => {
@@ -79,7 +113,9 @@ export function BotStatusProvider({ children }: { children: React.ReactNode }) {
         // Update botStatuses basierend auf der API-Antwort
         const newStatuses: BotStatusMap = {};
         data.forEach(bot => {
-          newStatuses[bot.id] = bot.status;
+          // Normalisiere die Bot-ID von der API
+          const normalizedId = normalizeBotId(bot.id);
+          newStatuses[normalizedId] = bot.status;
         });
 
         // Nur aktualisieren, wenn es tatsächlich Änderungen gibt
