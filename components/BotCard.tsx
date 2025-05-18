@@ -5,6 +5,7 @@ import { useWallet } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { LineChart, Line, ResponsiveContainer, Tooltip, YAxis } from 'recharts';
 import { Connection, PublicKey, Transaction, SystemProgram } from '@solana/web3.js';
+import { useBotStatus } from '@/contexts/BotStatusContext';
 
 interface BotCardProps {
   id: string;
@@ -48,10 +49,22 @@ const BotCard: FC<BotCardProps> = ({
   onStatusChange = () => {}
 }) => {
   const { connected, publicKey, signTransaction } = useWallet();
+  const { botStatuses, updateBotStatus, isBotActive } = useBotStatus();
   const [performanceTimeframe, setPerformanceTimeframe] = useState<'7d' | '30d'>('7d');
   const [riskPercentage, setRiskPercentage] = useState(baseRiskPerTrade);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Verwende den Status aus dem Kontext oder den Prop-Status
+  const actualStatus = id in botStatuses ? botStatuses[id] : status;
+  
+  // Statusänderungen aus dem Kontext an die Parent-Komponente weitergeben
+  useEffect(() => {
+    if (botStatuses[id] && botStatuses[id] !== status) {
+      console.log(`BotCard: Aktualisiere Status von ${id} über Context: ${status} -> ${botStatuses[id]}`);
+      onStatusChange(id, botStatuses[id]);
+    }
+  }, [botStatuses, id, status, onStatusChange]);
   
   // Status-Polling
   useEffect(() => {
@@ -94,8 +107,10 @@ const BotCard: FC<BotCardProps> = ({
       const botStatus = data.status;
       
       // Nur Status aktualisieren, wenn er sich geändert hat und gültig ist
-      if (botStatus && (botStatus === 'active' || botStatus === 'paused') && botStatus !== status) {
-        console.log(`BotCard: Bot ${id} Status geändert via Polling: ${status} -> ${botStatus}`);
+      if (botStatus && (botStatus === 'active' || botStatus === 'paused') && botStatus !== actualStatus) {
+        console.log(`BotCard: Bot ${id} Status geändert via Polling: ${actualStatus} -> ${botStatus}`);
+        // Aktualisiere zugleich den Kontext und die Parent-Komponente
+        updateBotStatus(id, botStatus as 'active' | 'paused');
         onStatusChange(id, botStatus as 'active' | 'paused');
       }
     } catch (fetchError) {
@@ -161,7 +176,7 @@ const BotCard: FC<BotCardProps> = ({
           botId: id,
           walletAddress: publicKey.toString(),
           riskPercentage: riskPercentage,
-          action: status === 'active' ? 'deactivate' : 'activate',
+          action: actualStatus === 'active' ? 'deactivate' : 'activate',
           botType: getBotTypeFromName(name)
         }),
       });
@@ -178,7 +193,7 @@ const BotCard: FC<BotCardProps> = ({
         body: JSON.stringify({
           botId: id,
           signedTransaction: signedTransaction.serialize().toString('base64'),
-          action: status === 'active' ? 'deactivate' : 'activate'
+          action: actualStatus === 'active' ? 'deactivate' : 'activate'
         }),
       });
       if (!confirmResponse.ok) {
@@ -188,7 +203,8 @@ const BotCard: FC<BotCardProps> = ({
       const confirmationResult = await confirmResponse.json();
       if (confirmationResult.success && confirmationResult.status) {
         const newStatus = confirmationResult.status === 'inactive' ? 'paused' : confirmationResult.status;
-        console.log(`BotCard: Bot ${id} Status geändert via activateBot: ${status} -> ${newStatus}`);
+        console.log(`BotCard: Bot ${id} Status geändert via activateBot: ${actualStatus} -> ${newStatus}`);
+        updateBotStatus(id, newStatus as 'active' | 'paused');
         onStatusChange(id, newStatus as 'active' | 'paused');
       } else {
         console.warn('Bot-Aktivierungs-Bestätigung lieferte keinen klaren Status. Starte fetchBotStatus manuell.');
@@ -216,7 +232,7 @@ const BotCard: FC<BotCardProps> = ({
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2 sm:gap-0 mb-4">
         <h3 className="text-xl sm:text-2xl font-bold text-primary bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary/70">{name}</h3>
         <div className="flex items-center">
-          <span className={`inline-block w-2 h-2 sm:w-3 sm:h-3 rounded-full mr-2 ${status === 'active' ? 'bg-green-500' : 'bg-yellow-500'}`}></span>
+          <span className={`inline-block w-2 h-2 sm:w-3 sm:h-3 rounded-full mr-2 ${actualStatus === 'active' ? 'bg-green-500' : 'bg-yellow-500'}`}></span>
           <span className={`px-2 py-1 sm:px-3 sm:py-1 rounded-full text-xs font-medium ${getRiskColor(riskLevel)} bg-dark-lighter backdrop-blur-sm self-start`}>
             {riskLevel.charAt(0).toUpperCase() + riskLevel.slice(1)} Risk
           </span>
@@ -331,7 +347,7 @@ const BotCard: FC<BotCardProps> = ({
             <button 
               className={`flex-1 py-2 rounded ${
                 isLoading ? 'bg-gray-600 cursor-not-allowed' :
-                status === 'active' ? 'bg-yellow-600 hover:bg-yellow-500' : 'bg-green-600 hover:bg-green-500'
+                actualStatus === 'active' ? 'bg-yellow-600 hover:bg-yellow-500' : 'bg-green-600 hover:bg-green-500'
               } transition-colors text-white relative text-sm sm:text-base`}
               onClick={activateBot}
               disabled={isLoading}
@@ -345,7 +361,7 @@ const BotCard: FC<BotCardProps> = ({
                   Processing...
                 </span>
               ) : (
-                status === 'active' ? 'Pause' : 'Resume'
+                actualStatus === 'active' ? 'Pause' : 'Resume'
               )}
             </button>
             <button className="flex-1 py-2 rounded bg-blue-600 hover:bg-blue-500 transition-colors text-white text-sm sm:text-base">

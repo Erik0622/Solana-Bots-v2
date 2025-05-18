@@ -1,8 +1,10 @@
 'use client';
 
-import React, { FC, useState } from 'react';
+import React, { FC, useState, useEffect } from 'react';
 import BotCard from './BotCard';
 import Link from 'next/link';
+import { useWallet } from '@solana/wallet-adapter-react';
+import { useBotStatus } from '@/contexts/BotStatusContext';
 
 const BotsSection: FC = () => {
   // Individual risk settings for each bot (1-50%)
@@ -10,19 +12,20 @@ const BotsSection: FC = () => {
   const [momentumBotRisk, setMomentumBotRisk] = useState(15);
   const [dipHunterRisk, setDipHunterRisk] = useState(15);
   
-  // Bot status states
-  const [botStatuses, setBotStatuses] = useState({
-    'vol-tracker': 'paused' as 'active' | 'paused',
-    'trend-surfer': 'paused' as 'active' | 'paused',
-    'arb-finder': 'paused' as 'active' | 'paused'
-  });
+  const { publicKey } = useWallet();
+  const { botStatuses, updateBotStatus, fetchAllBotStatuses } = useBotStatus();
 
+  // Lade Bot-Status beim ersten Rendern und bei Wallet-Änderungen
+  useEffect(() => {
+    if (publicKey) {
+      fetchAllBotStatuses(publicKey.toString());
+    }
+  }, [publicKey, fetchAllBotStatuses]);
+  
   // Handle bot status change
   const handleStatusChange = (id: string, status: 'active' | 'paused') => {
-    setBotStatuses(prev => ({
-      ...prev,
-      [id]: status
-    }));
+    console.log(`BotsSection: Status für Bot ${id} aktualisiert auf ${status}`);
+    updateBotStatus(id, status);
   };
 
   const bots = [
@@ -39,7 +42,7 @@ const BotsSection: FC = () => {
       riskColor: 'text-yellow-400',
       baseRiskPerTrade: volumeTrackerRisk, // Dynamic risk percentage
       riskManagement: 'The bot implements automatic stop-loss mechanisms for each trade with 35% loss limitation. Risk per trade can be adjusted from 1-50% of your capital.',
-      status: botStatuses['vol-tracker'],
+      status: botStatuses['vol-tracker'] || 'paused',
       profitToday: 2.5,
       profitWeek: 25.0,
       profitMonth: 71.6
@@ -57,7 +60,7 @@ const BotsSection: FC = () => {
       riskColor: 'text-red-400',
       baseRiskPerTrade: momentumBotRisk, // Dynamic risk percentage
       riskManagement: 'Due to the more aggressive strategy, this bot has a higher base volatility with a stop-loss at 35%. Risk per trade can be adjusted from 1-50% of your capital.',
-      status: botStatuses['trend-surfer'],
+      status: botStatuses['trend-surfer'] || 'paused',
       profitToday: 3.8,
       profitWeek: 38.4,
       profitMonth: 109.4
@@ -75,7 +78,7 @@ const BotsSection: FC = () => {
       riskColor: 'text-green-400',
       baseRiskPerTrade: dipHunterRisk, // Dynamic risk percentage
       riskManagement: 'Lowest base volatility with a stop-loss of 25%. Maximum holding time of 60 minutes for reduced risk. Risk per trade can be adjusted from 1-50% of your capital.',
-      status: botStatuses['arb-finder'],
+      status: botStatuses['arb-finder'] || 'paused',
       profitToday: 2.3,
       profitWeek: 23.4,
       profitMonth: 67.2

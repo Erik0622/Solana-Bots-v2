@@ -6,6 +6,7 @@ import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area } from 'recharts';
 import { Connection, LAMPORTS_PER_SOL, PublicKey, Transaction } from '@solana/web3.js';
 import { useConnection } from '@solana/wallet-adapter-react';
+import { useBotStatus } from '@/contexts/BotStatusContext';
 
 interface BotTransaction {
   timestamp: number;
@@ -46,6 +47,7 @@ interface ConnectedBot {
 const Dashboard: FC = () => {
   const { connected, publicKey, signTransaction } = useWallet();
   const { connection } = useConnection();
+  const { botStatuses, updateBotStatus, fetchAllBotStatuses } = useBotStatus();
   const [activeTab, setActiveTab] = useState<'positions' | 'performance' | 'bots'>('positions');
   const [timeframe, setTimeframe] = useState<'7d' | '30d' | 'all'>('30d');
   const [positions, setPositions] = useState<Position[]>([]);
@@ -62,14 +64,18 @@ const Dashboard: FC = () => {
       fetchPositions();
       fetchPerformanceData();
       fetchConnectedBots();
+      fetchAllBotStatuses(publicKey.toString());
       
-      const botsListInterval = setInterval(fetchConnectedBots, 10000);
+      const botsListInterval = setInterval(() => {
+        fetchConnectedBots();
+        fetchAllBotStatuses(publicKey.toString());
+      }, 10000);
 
       return () => {
         clearInterval(botsListInterval);
       };
     }
-  }, [connected, publicKey, timeframe]);
+  }, [connected, publicKey, timeframe, fetchAllBotStatuses]);
 
   useEffect(() => {
     const localFetchBalance = async () => {
@@ -160,7 +166,14 @@ const Dashboard: FC = () => {
         console.error('Error from /api/bots:', data.error);
         return;
       }
-      setConnectedBots(data); 
+      
+      // Statusinformationen aus dem Kontext anwenden, wenn vorhanden
+      const updatedBots = data.map((bot: any) => ({
+        ...bot,
+        status: botStatuses[bot.id] || bot.status
+      }));
+      
+      setConnectedBots(updatedBots); 
     } catch (error) {
       console.error('Error fetching bots:', error);
     }
@@ -181,7 +194,9 @@ const Dashboard: FC = () => {
         throw new Error('Bot not found locally.');
       }
 
-      const uiAction = currentBot.status === 'active' ? 'pause' : 'resume';
+      // Verwende den Status aus dem Kontext oder aus connectedBots
+      const botCurrentStatus = botStatuses[botId] || currentBot.status;
+      const uiAction = botCurrentStatus === 'active' ? 'pause' : 'resume';
       const backendApiAction = uiAction === 'resume' ? 'activate' : 'deactivate';
       const derivedBotType = currentBot.name.replace(/ Bot$/i, '').toLowerCase().replace(/\s+/g, '-');
 
@@ -215,6 +230,11 @@ const Dashboard: FC = () => {
       const confirmationData = await confirmResponse.json();
       if (confirmationData.success && confirmationData.status) {
         const newStatus = confirmationData.status === 'inactive' ? 'paused' : confirmationData.status as 'active' | 'paused';
+        
+        // Aktualisiere den Status im Kontext
+        updateBotStatus(botId, newStatus);
+        
+        // Aktualisiere die lokale Liste
         setConnectedBots(prevBots => 
           prevBots.map(b => 
             b.id === botId ? { ...b, status: newStatus } : b
