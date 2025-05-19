@@ -29,6 +29,7 @@ const BotsSection: FC = () => {
   const [botStatuses, setBotStatuses] = useState(getAllBotStatus());
   
   const { publicKey } = useWallet();
+  const { connected } = useWallet();
 
   // Regelmäßig den Status aus localStorage abrufen
   useEffect(() => {
@@ -151,6 +152,7 @@ const BotsSection: FC = () => {
               }}
               riskManagement={`Current risk per trade: ${bot.baseRiskPerTrade}% of your capital (Adjustable via risk slider)`}
               onStatusChange={handleStatusChange}
+              showFavoriteButton={connected}
             />
           ))}
         </div>

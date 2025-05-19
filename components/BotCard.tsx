@@ -6,6 +6,7 @@ import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { LineChart, Line, ResponsiveContainer, Tooltip, YAxis } from 'recharts';
 import { Connection, PublicKey, Transaction, SystemProgram } from '@solana/web3.js';
 import { getBotStatus, setBotStatus, isBotActive, saveBotRisk, getBotRisk } from '@/lib/botState';
+import { useFavoriteBots } from '@/hooks/useFavoriteBots';
 
 interface BotCardProps {
   id: string;
@@ -26,6 +27,7 @@ interface BotCardProps {
   profitWeek?: number;
   profitMonth?: number;
   onStatusChange?: (id: string, status: 'active' | 'paused') => void;
+  showFavoriteButton?: boolean;
 }
 
 const BotCard: FC<BotCardProps> = ({
@@ -46,19 +48,29 @@ const BotCard: FC<BotCardProps> = ({
   profitToday = 0,
   profitWeek = 0,
   profitMonth = 0,
-  onStatusChange = () => {}
+  onStatusChange = () => {},
+  showFavoriteButton = false
 }) => {
   const { connected, publicKey, signTransaction } = useWallet();
+  const { isBotFavorite, toggleFavorite } = useFavoriteBots();
   const [performanceTimeframe, setPerformanceTimeframe] = useState<'7d' | '30d'>('7d');
   const [riskPercentage, setRiskPercentage] = useState(getBotRisk(id));
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [botStatus, setBotStatusState] = useState<'active' | 'paused'>(getBotStatus(id));
+  const [isFavorite, setIsFavorite] = useState(false);
   
   // Stelle sicher, dass der Status beim ersten Laden gesetzt wird
   useEffect(() => {
     setBotStatusState(getBotStatus(id));
   }, [id]);
+
+  // Prüfe, ob der Bot favorisiert ist
+  useEffect(() => {
+    if (publicKey) {
+      setIsFavorite(isBotFavorite(id));
+    }
+  }, [id, publicKey, isBotFavorite]);
   
   // Bot-Status-Polling
   useEffect(() => {
@@ -249,155 +261,182 @@ const BotCard: FC<BotCardProps> = ({
   };
 
   return (
-    <div className="flex flex-col bg-dark-light rounded-xl p-4 sm:p-6 hover:shadow-lg transition-all duration-300 border border-dark-lighter hover:border-primary h-full">
+    <div className="flex flex-col bg-dark-light rounded-xl p-4 sm:p-6 hover:shadow-lg transition-all duration-300 border border-dark-lighter hover:border-primary h-full relative">
+      {showFavoriteButton && connected && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            toggleFavorite(id);
+            setIsFavorite(!isFavorite);
+          }}
+          className="absolute top-4 right-4 z-10 text-xl hover:scale-110 transition-transform"
+          aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
+        >
+          {isFavorite ? (
+            <span className="text-yellow-400">★</span>
+          ) : (
+            <span className="text-white/60 hover:text-yellow-400">☆</span>
+          )}
+        </button>
+      )}
+      
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2 sm:gap-0 mb-4">
         <h3 className="text-xl sm:text-2xl font-bold text-primary bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary/70">{name}</h3>
-        <div className="flex items-center">
-          <span className={`inline-block w-2 h-2 sm:w-3 sm:h-3 rounded-full mr-2 ${botStatus === 'active' ? 'bg-green-500' : 'bg-yellow-500'}`}></span>
-          <span className={`px-2 py-1 sm:px-3 sm:py-1 rounded-full text-xs font-medium ${getRiskColor(riskLevel)} bg-dark-lighter backdrop-blur-sm self-start`}>
-            {riskLevel.charAt(0).toUpperCase() + riskLevel.slice(1)} Risk
-          </span>
+        <div className={`${getRiskColor(riskLevel)} text-sm sm:text-base font-semibold`}>
+          {riskLevel.charAt(0).toUpperCase() + riskLevel.slice(1)} Risk
         </div>
       </div>
-      <p className="text-sm sm:text-base text-white/80 mb-4 sm:mb-6 line-clamp-3 hover:line-clamp-none transition-all duration-300">{description}</p>
-      <div className="grid grid-cols-2 gap-2 sm:gap-4 mb-4 sm:mb-6">
-        <div className="stat-card bg-dark-lighter p-2 sm:p-4 rounded-lg backdrop-blur-sm hover:scale-105 transition-transform duration-300">
-          <p className="text-xs sm:text-sm text-white/60">Weekly Return</p>
-          <p className="text-base sm:text-2xl font-bold text-primary">{weeklyReturn}</p>
-        </div>
-        <div className="stat-card bg-dark-lighter p-2 sm:p-4 rounded-lg backdrop-blur-sm hover:scale-105 transition-transform duration-300">
-          <p className="text-xs sm:text-sm text-white/60">Monthly Return</p>
-          <p className="text-base sm:text-2xl font-bold text-primary">{monthlyReturn}</p>
-        </div>
-        <div className="stat-card bg-dark-lighter p-2 sm:p-4 rounded-lg backdrop-blur-sm hover:scale-105 transition-transform duration-300">
-          <p className="text-xs sm:text-sm text-white/60">Trades (30d)</p>
-          <p className="text-base sm:text-2xl font-bold text-white">{trades}</p>
-        </div>
-        <div className="stat-card bg-dark-lighter p-2 sm:p-4 rounded-lg backdrop-blur-sm hover:scale-105 transition-transform duration-300">
-          <p className="text-xs sm:text-sm text-white/60">Win Rate</p>
-          <p className="text-base sm:text-2xl font-bold text-white">{winRate}</p>
-        </div>
-      </div>
-      <div className="mb-4 sm:mb-6 bg-dark-lighter p-2 sm:p-4 rounded-lg">
-        <div className="flex justify-between items-center mb-2 sm:mb-3">
-          <h4 className="text-sm sm:text-lg font-semibold">Performance History</h4>
-          <div className="flex text-xs">
-            <button 
-              className={`px-2 py-1 rounded-l-md ${performanceTimeframe === '7d' ? 'bg-primary text-black' : 'bg-dark text-white/60'}`}
-              onClick={() => setPerformanceTimeframe('7d')}
-            >
-              7D
-            </button>
-            <button 
-              className={`px-2 py-1 rounded-r-md ${performanceTimeframe === '30d' ? 'bg-primary text-black' : 'bg-dark text-white/60'}`}
-              onClick={() => setPerformanceTimeframe('30d')}
-            >
-              30D
-            </button>
+      
+      <div className="p-6">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2 sm:gap-0 mb-4">
+          <h3 className="text-xl sm:text-2xl font-bold text-primary bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary/70">{name}</h3>
+          <div className="flex items-center">
+            <span className={`inline-block w-2 h-2 sm:w-3 sm:h-3 rounded-full mr-2 ${botStatus === 'active' ? 'bg-green-500' : 'bg-yellow-500'}`}></span>
+            <span className={`px-2 py-1 sm:px-3 sm:py-1 rounded-full text-xs font-medium ${getRiskColor(riskLevel)} bg-dark-lighter backdrop-blur-sm self-start`}>
+              {riskLevel.charAt(0).toUpperCase() + riskLevel.slice(1)} Risk
+            </span>
           </div>
         </div>
-        <div className="h-28 sm:h-36">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={performanceData}>
-              <YAxis 
-                domain={['dataMin', 'dataMax']} 
-                tickFormatter={(value) => `${value}%`} 
-                width={30}
-                axisLine={false}
-                tickLine={false}
-                tick={{fill: '#999', fontSize: 10}}
-              />
-              <Tooltip 
-                contentStyle={{ backgroundColor: '#1a1a1a', border: 'none' }}
-                formatter={(value: number) => [`${value}%`, 'Daily Return']}
-                labelFormatter={(label) => {
-                  const date = new Date(label);
-                  return `${date.toLocaleDateString()}`; 
-                }}
-              />
-              <Line 
-                type="monotone" 
-                dataKey="profit"
-                stroke="#10b981" 
-                strokeWidth={2}
-                dot={false}
-                activeDot={{ r: 4 }}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-        <div className="flex justify-between mt-2">
-          <div>
-            <p className="text-xs text-white/60">Total Return</p>
-            <p className="text-xs sm:text-sm font-semibold text-primary">+{totalProfit}%</p>
+        <p className="text-sm sm:text-base text-white/80 mb-4 sm:mb-6 line-clamp-3 hover:line-clamp-none transition-all duration-300">{description}</p>
+        <div className="grid grid-cols-2 gap-2 sm:gap-4 mb-4 sm:mb-6">
+          <div className="stat-card bg-dark-lighter p-2 sm:p-4 rounded-lg backdrop-blur-sm hover:scale-105 transition-transform duration-300">
+            <p className="text-xs sm:text-sm text-white/60">Weekly Return</p>
+            <p className="text-base sm:text-2xl font-bold text-primary">{weeklyReturn}</p>
           </div>
-          <div>
-            <p className="text-xs text-white/60">Daily Average</p>
-            <p className="text-xs sm:text-sm font-semibold text-primary">+{averageProfit}%</p>
+          <div className="stat-card bg-dark-lighter p-2 sm:p-4 rounded-lg backdrop-blur-sm hover:scale-105 transition-transform duration-300">
+            <p className="text-xs sm:text-sm text-white/60">Monthly Return</p>
+            <p className="text-base sm:text-2xl font-bold text-primary">{monthlyReturn}</p>
+          </div>
+          <div className="stat-card bg-dark-lighter p-2 sm:p-4 rounded-lg backdrop-blur-sm hover:scale-105 transition-transform duration-300">
+            <p className="text-xs sm:text-sm text-white/60">Trades (30d)</p>
+            <p className="text-base sm:text-2xl font-bold text-white">{trades}</p>
+          </div>
+          <div className="stat-card bg-dark-lighter p-2 sm:p-4 rounded-lg backdrop-blur-sm hover:scale-105 transition-transform duration-300">
+            <p className="text-xs sm:text-sm text-white/60">Win Rate</p>
+            <p className="text-base sm:text-2xl font-bold text-white">{winRate}</p>
           </div>
         </div>
-      </div>
-      <div className="mb-4 sm:mb-6">
-        <h4 className="text-sm sm:text-lg font-semibold mb-1 sm:mb-2">Strategy</h4>
-        <p className="text-xs sm:text-sm text-white/80 line-clamp-3 hover:line-clamp-none transition-all duration-300">{strategy}</p>
-      </div>
-      <div className="mb-4 sm:mb-6">
-        <h4 className="text-sm sm:text-lg font-semibold mb-1 sm:mb-2">Risk Management</h4>
-        <p className="text-xs sm:text-sm text-white/80 mb-2 sm:mb-3">{riskManagement}</p>
-        <div className="bg-dark-lighter p-2 sm:p-3 rounded-lg">
-          <div className="flex justify-between text-xs text-white/60 mb-1">
-            <span>Low Risk (1%)</span>
-            <span>High Risk (50%)</span>
+        <div className="mb-4 sm:mb-6 bg-dark-lighter p-2 sm:p-4 rounded-lg">
+          <div className="flex justify-between items-center mb-2 sm:mb-3">
+            <h4 className="text-sm sm:text-lg font-semibold">Performance History</h4>
+            <div className="flex text-xs">
+              <button 
+                className={`px-2 py-1 rounded-l-md ${performanceTimeframe === '7d' ? 'bg-primary text-black' : 'bg-dark text-white/60'}`}
+                onClick={() => setPerformanceTimeframe('7d')}
+              >
+                7D
+              </button>
+              <button 
+                className={`px-2 py-1 rounded-r-md ${performanceTimeframe === '30d' ? 'bg-primary text-black' : 'bg-dark text-white/60'}`}
+                onClick={() => setPerformanceTimeframe('30d')}
+              >
+                30D
+              </button>
+            </div>
           </div>
-          <input
-            type="range"
-            min="1"
-            max="50"
-            value={riskPercentage}
-            onChange={handleRiskChange}
-            className="w-full h-2 bg-dark rounded-lg appearance-none cursor-pointer accent-primary"
-          />
-          <div className="flex justify-center mt-1 sm:mt-2">
-            <span className="text-xs sm:text-sm text-primary font-medium">Current: {riskPercentage}% per trade</span>
+          <div className="h-28 sm:h-36">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={performanceData}>
+                <YAxis 
+                  domain={['dataMin', 'dataMax']} 
+                  tickFormatter={(value) => `${value}%`} 
+                  width={30}
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{fill: '#999', fontSize: 10}}
+                />
+                <Tooltip 
+                  contentStyle={{ backgroundColor: '#1a1a1a', border: 'none' }}
+                  formatter={(value: number) => [`${value}%`, 'Daily Return']}
+                  labelFormatter={(label) => {
+                    const date = new Date(label);
+                    return `${date.toLocaleDateString()}`; 
+                  }}
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey="profit"
+                  stroke="#10b981" 
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={{ r: 4 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="flex justify-between mt-2">
+            <div>
+              <p className="text-xs text-white/60">Total Return</p>
+              <p className="text-xs sm:text-sm font-semibold text-primary">+{totalProfit}%</p>
+            </div>
+            <div>
+              <p className="text-xs text-white/60">Daily Average</p>
+              <p className="text-xs sm:text-sm font-semibold text-primary">+{averageProfit}%</p>
+            </div>
           </div>
         </div>
-      </div>
-      <div className="mt-auto">
-        {connected ? (
-          <div className="flex gap-2">
-            <button 
-              className={`flex-1 py-2 rounded ${
-                isLoading ? 'bg-gray-600 cursor-not-allowed' :
-                botStatus === 'active' ? 'bg-yellow-600 hover:bg-yellow-500' : 'bg-green-600 hover:bg-green-500'
-              } transition-colors text-white relative text-sm sm:text-base`}
-              onClick={activateBot}
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <span className="flex items-center justify-center">
-                  <svg className="animate-spin h-4 w-4 sm:h-5 sm:w-5 mr-2" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                  </svg>
-                  Processing...
-                </span>
-              ) : (
-                botStatus === 'active' ? 'Pause' : 'Resume'
-              )}
-            </button>
-            <button className="flex-1 py-2 rounded bg-blue-600 hover:bg-blue-500 transition-colors text-white text-sm sm:text-base">
-              Settings
-            </button>
+        <div className="mb-4 sm:mb-6">
+          <h4 className="text-sm sm:text-lg font-semibold mb-1 sm:mb-2">Strategy</h4>
+          <p className="text-xs sm:text-sm text-white/80 line-clamp-3 hover:line-clamp-none transition-all duration-300">{strategy}</p>
+        </div>
+        <div className="mb-4 sm:mb-6">
+          <h4 className="text-sm sm:text-lg font-semibold mb-1 sm:mb-2">Risk Management</h4>
+          <p className="text-xs sm:text-sm text-white/80 mb-2 sm:mb-3">{riskManagement}</p>
+          <div className="bg-dark-lighter p-2 sm:p-3 rounded-lg">
+            <div className="flex justify-between text-xs text-white/60 mb-1">
+              <span>Low Risk (1%)</span>
+              <span>High Risk (50%)</span>
+            </div>
+            <input
+              type="range"
+              min="1"
+              max="50"
+              value={riskPercentage}
+              onChange={handleRiskChange}
+              className="w-full h-2 bg-dark rounded-lg appearance-none cursor-pointer accent-primary"
+            />
+            <div className="flex justify-center mt-1 sm:mt-2">
+              <span className="text-xs sm:text-sm text-primary font-medium">Current: {riskPercentage}% per trade</span>
+            </div>
           </div>
-        ) : (
-          <WalletMultiButton className="w-full py-2 sm:py-3 justify-center text-sm sm:text-base hover:scale-105 transition-transform duration-300" />
+        </div>
+        <div className="mt-auto">
+          {connected ? (
+            <div className="flex gap-2">
+              <button 
+                className={`flex-1 py-2 rounded ${
+                  isLoading ? 'bg-gray-600 cursor-not-allowed' :
+                  botStatus === 'active' ? 'bg-yellow-600 hover:bg-yellow-500' : 'bg-green-600 hover:bg-green-500'
+                } transition-colors text-white relative text-sm sm:text-base`}
+                onClick={activateBot}
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <span className="flex items-center justify-center">
+                    <svg className="animate-spin h-4 w-4 sm:h-5 sm:w-5 mr-2" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    Processing...
+                  </span>
+                ) : (
+                  botStatus === 'active' ? 'Pause' : 'Resume'
+                )}
+              </button>
+              <button className="flex-1 py-2 rounded bg-blue-600 hover:bg-blue-500 transition-colors text-white text-sm sm:text-base">
+                Settings
+              </button>
+            </div>
+          ) : (
+            <WalletMultiButton className="w-full py-2 sm:py-3 justify-center text-sm sm:text-base hover:scale-105 transition-transform duration-300" />
+          )}
+        </div>
+        {error && (
+          <div className="mt-2 text-red-500 text-sm">
+            {error}
+          </div>
         )}
       </div>
-      {error && (
-        <div className="mt-2 text-red-500 text-sm">
-          {error}
-        </div>
-      )}
     </div>
   );
 };
