@@ -2,6 +2,9 @@ import './globals.css'
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import { Providers } from './providers'
+import { Toaster } from 'react-hot-toast'
+import '@solana/wallet-adapter-react-ui/styles.css'
+import ClientLayout from '@/components/ClientLayout'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -31,9 +34,21 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        <Providers>
-          {children}
-        </Providers>
+        <ClientLayout>
+          <Providers>
+            {children}
+          </Providers>
+          <Toaster 
+            position="bottom-right"
+            toastOptions={{
+              style: {
+                background: '#1a1b1e',
+                color: '#fff',
+                border: '1px solid #2d2e32',
+              },
+            }}
+          />
+        </ClientLayout>
       </body>
     </html>
   )
