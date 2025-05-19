@@ -27,10 +27,4 @@ const VerifyOnX = () => {
   );
 };
 
-export default VerifyOnX;
-
-/* Add this to your global.css or directly in your Tailwind config */
-.writing-mode-vertical {
-  writing-mode: vertical-lr;
-  transform: rotate(180deg);
-} 
+export default VerifyOnX; 
