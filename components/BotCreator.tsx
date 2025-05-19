@@ -4,11 +4,14 @@ import React, { FC, useState } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import BotCard from './BotCard';
+import { useCustomBots } from '@/hooks/useCustomBots';
+import { toast } from 'react-hot-toast';
 
 interface BotCreatorProps {}
 
 const BotCreator: FC<BotCreatorProps> = () => {
   const { connected } = useWallet();
+  const { saveBot } = useCustomBots();
   const [title, setTitle] = useState('');
   const [strategy, setStrategy] = useState('');
   const [riskReward, setRiskReward] = useState('');
@@ -74,7 +77,8 @@ const BotCreator: FC<BotCreatorProps> = () => {
       }
       const generatedCode = data.candidates[0].content.parts[0].text;
 
-      setGeneratedBot({
+      // Create bot object
+      const newBot = {
         id: `custom-${Date.now()}`,
         name: title,
         description: strategy,
@@ -87,14 +91,31 @@ const BotCreator: FC<BotCreatorProps> = () => {
         riskColor: 'text-blue-400',
         baseRiskPerTrade: parseFloat(riskReward.split(':')[0]) || 15,
         riskManagement: `Risk/Reward: ${riskReward}, Token Age: ${tokenAge}, Market Cap: ${minMarketCap}-${maxMarketCap}`,
-        status: 'paused',
+        status: 'paused' as const,
         profitToday: 0,
         profitWeek: 0,
         profitMonth: 0,
-      });
+        code: generatedCode // Store the generated code
+      };
+
+      // Save the bot using our custom hook
+      const savedBot = saveBot(newBot);
+      setGeneratedBot(savedBot);
+      
+      // Show success message
+      toast.success('Bot created and saved successfully!');
+
+      // Optional: Clear form
+      setTitle('');
+      setStrategy('');
+      setRiskReward('');
+      setTokenAge('');
+      setMinMarketCap('');
+      setMaxMarketCap('');
 
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unknown error occurred.');
+      toast.error('Failed to create bot. Please try again.');
     } finally {
       setIsGenerating(false);
     }
