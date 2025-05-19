@@ -9,19 +9,19 @@ import ClientLayout from '@/components/ClientLayout'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'SolBotQuants | Intelligente Trading-Bots für Solana',
-  description: 'Maximieren Sie Ihre Trading-Ergebnisse mit unseren hochentwickelten, vollautomatischen Trading-Bots für die Solana-Blockchain. Bis zu 837% jährliche Rendite mit fortschrittlichem Risikomanagement.',
-  keywords: 'solana, trading bot, kryptowährung, automatisierter handel, defi, blockchain, arbitrage, quant, algorithmic trading',
+  title: 'SolBotQuants | Intelligent Trading Bots for Solana',
+  description: 'Maximize your trading results with our sophisticated, fully automated trading bots for the Solana blockchain. Up to 460% monthly return with advanced risk management.',
+  keywords: 'solana, trading bot, cryptocurrency, automated trading, defi, blockchain, arbitrage, quant, algorithmic trading',
   authors: [{ name: 'SolBotQuants Team' }],
   openGraph: {
-    title: 'SolBotQuants | Intelligente Trading-Bots für Solana',
-    description: 'Hochleistungs-Trading-Bots für Solana mit nachgewiesener Erfolgsbilanz.',
+    title: 'SolBotQuants | Intelligent Trading Bots for Solana',
+    description: 'High-performance trading bots for Solana with proven track record.',
     images: ['/og-image.png'],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'SolBotQuants',
-    description: 'Intelligente Trading-Bots für Solana',
+    description: 'Intelligent Trading Bots for Solana',
     images: ['/twitter-image.png'],
   },
 }

@@ -156,9 +156,9 @@ const BotCreator: FC<BotCreatorProps> = () => {
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <div className="bg-dark-lighter p-6 rounded-lg">
+          <div className="bg-dark-lighter p-4 sm:p-6 rounded-lg">
             <h3 className="text-xl font-bold mb-6">Bot Configuration</h3>
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
               <div>
                 <label className="block text-white/80 mb-2">Bot Title</label>
                 <input
@@ -175,7 +175,7 @@ const BotCreator: FC<BotCreatorProps> = () => {
                 <textarea
                   value={strategy}
                   onChange={(e) => setStrategy(e.target.value)}
-                  className="w-full bg-dark border border-dark-lighter rounded-lg px-4 py-2 text-white focus:border-primary focus:outline-none h-32"
+                  className="w-full bg-dark border border-dark-lighter rounded-lg px-4 py-2 text-white focus:border-primary focus:outline-none h-24 sm:h-32"
                   placeholder="Describe your trading strategy in detail..."
                 />
               </div>
@@ -206,7 +206,7 @@ const BotCreator: FC<BotCreatorProps> = () => {
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-white/80 mb-2">Min. Market Cap</label>
                   <input
@@ -243,7 +243,7 @@ const BotCreator: FC<BotCreatorProps> = () => {
             </form>
           </div>
 
-          <div>
+          <div className="order-first lg:order-last mb-6 lg:mb-0">
             <h3 className="text-xl font-bold mb-6">Bot Preview</h3>
             {generatedBot ? (
               <BotCard {...generatedBot} />

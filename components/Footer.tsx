@@ -1,14 +1,15 @@
 import React, { FC } from 'react';
+import Link from 'next/link';
 
 const Footer: FC = () => {
   return (
     <footer className="bg-dark px-6 py-12 border-t border-dark-lighter">
       <div className="container mx-auto">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           <div>
             <h4 className="text-lg font-bold text-white mb-4">SolBotQuants</h4>
             <p className="text-white/60 mb-4">
-              Intelligente Trading-Bots für die Solana-Blockchain mit nachgewiesener Rentabilität und modernem Risikomanagement.
+              Intelligent trading bots for the Solana blockchain with proven profitability and modern risk management.
             </p>
             <p className="text-white/60 text-sm">
               Developer Wallet: <br />
@@ -19,28 +20,19 @@ const Footer: FC = () => {
           <div>
             <h4 className="text-lg font-bold text-white mb-4">Trading Bots</h4>
             <ul className="space-y-2 text-white/60">
-              <li><a href="#" className="hover:text-primary transition-colors">Volume Tracker</a></li>
-              <li><a href="#" className="hover:text-primary transition-colors">Trend Surfer</a></li>
-              <li><a href="#" className="hover:text-primary transition-colors">Arbitrage Finder</a></li>
+              <li><Link href="/#bots" className="hover:text-primary transition-colors">Volume Tracker</Link></li>
+              <li><Link href="/#bots" className="hover:text-primary transition-colors">Momentum Bot</Link></li>
+              <li><Link href="/#bots" className="hover:text-primary transition-colors">Dip Hunter</Link></li>
             </ul>
           </div>
           
           <div>
             <h4 className="text-lg font-bold text-white mb-4">Links</h4>
             <ul className="space-y-2 text-white/60">
-              <li><a href="#" className="hover:text-primary transition-colors">Documentation</a></li>
-              <li><a href="#" className="hover:text-primary transition-colors">API</a></li>
-              <li><a href="#" className="hover:text-primary transition-colors">FAQ</a></li>
-              <li><a href="#" className="hover:text-primary transition-colors">Contact</a></li>
-            </ul>
-          </div>
-          
-          <div>
-            <h4 className="text-lg font-bold text-white mb-4">Legal</h4>
-            <ul className="space-y-2 text-white/60">
-              <li><a href="#" className="hover:text-primary transition-colors">Terms of Service</a></li>
-              <li><a href="#" className="hover:text-primary transition-colors">Privacy Policy</a></li>
-              <li><a href="#" className="hover:text-primary transition-colors">Risk Disclosure</a></li>
+              <li><a href="https://x.com/solbotquants?s=21" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">X</a></li>
+              <li><Link href="/api-docs" className="hover:text-primary transition-colors">API</Link></li>
+              <li><Link href="/#faq" className="hover:text-primary transition-colors">FAQ</Link></li>
+              <li><a href="mailto:contact@solbotquants.io" className="hover:text-primary transition-colors">Contact</a></li>
             </ul>
           </div>
         </div>

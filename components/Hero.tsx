@@ -38,12 +38,12 @@ const Hero: FC = () => {
         
         <div className="mt-16 grid grid-cols-2 md:flex md:flex-wrap justify-center gap-4 md:gap-8">
           <div className="stat-card col-span-1">
-            <p className="text-3xl md:text-4xl font-bold text-primary">+615%</p>
-            <p className="text-white/60 text-sm md:text-base">Average Annual Return</p>
+            <p className="text-3xl md:text-4xl font-bold text-primary">+460%</p>
+            <p className="text-white/60 text-sm md:text-base">Average Monthly Return</p>
           </div>
           <div className="stat-card col-span-1">
-            <p className="text-3xl md:text-4xl font-bold text-primary">+37%</p>
-            <p className="text-white/60 text-sm md:text-base">Last 30 Days Performance</p>
+            <p className="text-3xl md:text-4xl font-bold text-primary">+178%</p>
+            <p className="text-white/60 text-sm md:text-base">Last 7 Days Performance</p>
           </div>
         </div>
       </div>

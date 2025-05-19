@@ -34,4 +34,9 @@ body {
   .stat-card {
     @apply bg-dark-lighter p-4 rounded-lg;
   }
+}
+
+.writing-mode-vertical {
+  writing-mode: vertical-lr;
+  transform: rotate(180deg);
 } 
