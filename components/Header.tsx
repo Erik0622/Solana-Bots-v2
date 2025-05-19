@@ -25,7 +25,7 @@ const Header: FC = () => {
   }, []);
   
   const isActive = (path: string) => pathname === path;
-  const isActiveHash = (hash: string) => pathname === '/' && currentHash === hash;
+  const isActiveHash = (hash: string) => currentHash === hash;
   
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-dark/80 backdrop-blur-md px-6 py-4 border-b border-dark-lighter">
@@ -45,7 +45,7 @@ const Header: FC = () => {
         
         <nav className="hidden md:flex items-center space-x-8 mr-8">
           <Link 
-            href="#bots" 
+            href="/#bots" 
             className={`text-white/80 hover:text-primary transition-colors ${
               isActiveHash('bots') ? 'text-primary' : ''
             }`}
@@ -61,7 +61,7 @@ const Header: FC = () => {
             Dashboard
           </Link>
           <Link 
-            href="#features" 
+            href="/#features" 
             className={`text-white/80 hover:text-primary transition-colors ${
               isActiveHash('features') ? 'text-primary' : ''
             }`}
@@ -77,7 +77,7 @@ const Header: FC = () => {
             Launchpad
           </Link>
           <Link 
-            href="#faq" 
+            href="/#faq" 
             className={`text-white/80 hover:text-primary transition-colors ${
               isActiveHash('faq') ? 'text-primary' : ''
             }`}
