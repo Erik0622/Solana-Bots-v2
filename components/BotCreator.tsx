@@ -87,7 +87,7 @@ const BotCreator: FC<BotCreatorProps> = () => {
         trades: 0,
         winRate: '0%',
         strategy: strategy,
-        riskLevel: 'custom',
+        riskLevel: 'custom' as const,
         riskColor: 'text-blue-400',
         baseRiskPerTrade: parseFloat(riskReward.split(':')[0]) || 15,
         riskManagement: `Risk/Reward: ${riskReward}, Token Age: ${tokenAge}, Market Cap: ${minMarketCap}-${maxMarketCap}`,
@@ -225,17 +225,19 @@ const BotCreator: FC<BotCreatorProps> = () => {
                 </div>
               </div>
 
-              <button
-                type="submit"
-                disabled={isGenerating}
-                className={`w-full py-3 rounded-lg font-semibold transition-colors ${
-                  isGenerating
-                    ? 'bg-gray-600 cursor-not-allowed'
-                    : 'bg-primary hover:bg-primary/90 text-black'
-                }`}
-              >
-                {isGenerating ? 'Generating Bot...' : 'Generate Bot'}
-              </button>
+              <form onSubmit={handleSubmit} className="mt-6">
+                <button
+                  type="submit"
+                  disabled={isGenerating}
+                  className={`w-full py-3 rounded-lg font-semibold transition-colors ${
+                    isGenerating
+                      ? 'bg-gray-600 cursor-not-allowed'
+                      : 'bg-primary hover:bg-primary/90 text-black'
+                  }`}
+                >
+                  {isGenerating ? 'Generating Bot...' : 'Generate Bot'}
+                </button>
+              </form>
             </form>
           </div>
 
