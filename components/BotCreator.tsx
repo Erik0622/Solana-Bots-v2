@@ -136,7 +136,11 @@ const BotCreator: FC<BotCreatorProps> = () => {
   return (
     <section className="py-16 px-6 bg-dark-light min-h-screen">
       <div className="container mx-auto">
-        <h2 className="text-3xl font-bold mb-8">Bot Launchpad</h2>
+        <h2 className="text-3xl font-bold mb-4">Bot Launchpad</h2>
+        <p className="text-white/80 mb-8 max-w-3xl">
+          Design your custom trading bot with our AI-powered strategy generator. Our advanced artificial intelligence
+          will analyze your parameters and create a sophisticated trading strategy tailored to your preferences.
+        </p>
         
         {error && (
           <div className="bg-red-900/50 text-red-300 p-4 rounded-lg mb-6 border border-red-700">

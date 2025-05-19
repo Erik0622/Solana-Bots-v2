@@ -61,6 +61,14 @@ const Header: FC = () => {
             Dashboard
           </Link>
           <Link
+            href="/launchpad"
+            className={`text-white/80 hover:text-primary transition-colors ${
+              isActive('/launchpad') ? 'text-primary border-b-2 border-primary pb-1' : ''
+            }`}
+          >
+            Launchpad
+          </Link>
+          <Link
             href="/my-bots"
             className={`text-white/80 hover:text-primary transition-colors ${
               isActive('/my-bots') ? 'text-primary border-b-2 border-primary pb-1' : ''
@@ -75,14 +83,6 @@ const Header: FC = () => {
             }`}
           >
             Features
-          </Link>
-          <Link
-            href="/launchpad"
-            className={`text-white/80 hover:text-primary transition-colors ${
-              isActive('/launchpad') ? 'text-primary border-b-2 border-primary pb-1' : ''
-            }`}
-          >
-            Launchpad
           </Link>
           <Link 
             href="/#faq" 

@@ -287,16 +287,7 @@ const BotCard: FC<BotCardProps> = ({
         </div>
       </div>
       
-      <div className="p-6">
-        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2 sm:gap-0 mb-4">
-          <h3 className="text-xl sm:text-2xl font-bold text-primary bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary/70">{name}</h3>
-          <div className="flex items-center">
-            <span className={`inline-block w-2 h-2 sm:w-3 sm:h-3 rounded-full mr-2 ${botStatus === 'active' ? 'bg-green-500' : 'bg-yellow-500'}`}></span>
-            <span className={`px-2 py-1 sm:px-3 sm:py-1 rounded-full text-xs font-medium ${getRiskColor(riskLevel)} bg-dark-lighter backdrop-blur-sm self-start`}>
-              {riskLevel.charAt(0).toUpperCase() + riskLevel.slice(1)} Risk
-            </span>
-          </div>
-        </div>
+      <div className="mt-2">
         <p className="text-sm sm:text-base text-white/80 mb-4 sm:mb-6 line-clamp-3 hover:line-clamp-none transition-all duration-300">{description}</p>
         <div className="grid grid-cols-2 gap-2 sm:gap-4 mb-4 sm:mb-6">
           <div className="stat-card bg-dark-lighter p-2 sm:p-4 rounded-lg backdrop-blur-sm hover:scale-105 transition-transform duration-300">
@@ -420,7 +411,7 @@ const BotCard: FC<BotCardProps> = ({
                     Processing...
                   </span>
                 ) : (
-                  botStatus === 'active' ? 'Pause' : 'Resume'
+                  botStatus === 'active' ? 'Pause' : 'Start'
                 )}
               </button>
               <button className="flex-1 py-2 rounded bg-blue-600 hover:bg-blue-500 transition-colors text-white text-sm sm:text-base">
