@@ -225,19 +225,17 @@ const BotCreator: FC<BotCreatorProps> = () => {
                 </div>
               </div>
 
-              <form onSubmit={handleSubmit} className="mt-6">
-                <button
-                  type="submit"
-                  disabled={isGenerating}
-                  className={`w-full py-3 rounded-lg font-semibold transition-colors ${
-                    isGenerating
-                      ? 'bg-gray-600 cursor-not-allowed'
-                      : 'bg-primary hover:bg-primary/90 text-black'
-                  }`}
-                >
-                  {isGenerating ? 'Generating Bot...' : 'Generate Bot'}
-                </button>
-              </form>
+              <button
+                type="submit"
+                disabled={isGenerating}
+                className={`w-full py-3 rounded-lg font-semibold transition-colors ${
+                  isGenerating
+                    ? 'bg-gray-600 cursor-not-allowed'
+                    : 'bg-primary hover:bg-primary/90 text-black'
+                }`}
+              >
+                {isGenerating ? 'Generating Bot...' : 'Generate Bot'}
+              </button>
             </form>
           </div>
 
