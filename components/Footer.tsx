@@ -13,7 +13,7 @@ const Footer: FC = () => {
             </p>
             <p className="text-white/60 text-sm">
               Developer Wallet: <br />
-              <span className="text-primary">GWep4pYfd6o5uK7rLKScmsFqBDr4w7RMij89Vw2YdVX</span>
+              <span className="text-primary">81EWHKqwf2bfVfFn71VcLY1VvnxDXsHQAyy85PZLc38D</span>
             </p>
           </div>
           
