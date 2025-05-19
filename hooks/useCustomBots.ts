@@ -12,7 +12,7 @@ export interface CustomBot {
   trades: number;
   winRate: string;
   strategy: string;
-  riskLevel: string;
+  riskLevel: 'low' | 'moderate' | 'high' | 'custom';
   riskColor: string;
   baseRiskPerTrade: number;
   riskManagement: string;
@@ -22,6 +22,7 @@ export interface CustomBot {
   profitMonth: number;
   createdAt: string;
   walletAddress: string;
+  code?: string; // Optional field for storing the generated code
 }
 
 export const useCustomBots = () => {

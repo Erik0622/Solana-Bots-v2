@@ -16,7 +16,7 @@ interface BotCardProps {
   trades: number;
   winRate: string;
   strategy: string;
-  riskLevel: 'low' | 'moderate' | 'high';
+  riskLevel: 'low' | 'moderate' | 'high' | 'custom';
   riskColor?: string;
   riskManagement?: string;
   baseRiskPerTrade: number;
