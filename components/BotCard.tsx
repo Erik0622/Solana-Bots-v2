@@ -7,6 +7,7 @@ import { LineChart, Line, ResponsiveContainer, Tooltip, YAxis } from 'recharts';
 import { Connection, PublicKey, Transaction, SystemProgram } from '@solana/web3.js';
 import { getBotStatus, setBotStatus, isBotActive, saveBotRisk, getBotRisk } from '@/lib/botState';
 import { useFavoriteBots } from '@/hooks/useFavoriteBots';
+import { markBotForTrading } from '@/lib/trading/mockHandler';
 
 interface BotCardProps {
   id: string;
@@ -236,6 +237,15 @@ const BotCard: FC<BotCardProps> = ({
         // Aktualisiere sowohl den lokalen Zustand als auch den globalen Speicher
         setBotStatusState(newStatus);
         setBotStatus(id, newStatus);
+        
+        // Markiere den Bot für echte Trades, wenn er aktiviert wurde
+        markBotForTrading(id, newStatus === 'active');
+        
+        // Sende benutzerdefiniertes Event für andere Komponenten
+        const event = new CustomEvent(newStatus === 'active' ? 'bot-activated' : 'bot-deactivated', {
+          detail: { botId: id }
+        });
+        document.dispatchEvent(event);
         
         // Informiere die Elternkomponente
         onStatusChange(id, newStatus);

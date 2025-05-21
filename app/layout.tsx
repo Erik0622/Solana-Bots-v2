@@ -48,6 +48,19 @@ export default function RootLayout({
               },
             }}
           />
+          <script
+            dangerouslySetInnerHTML={{
+              __html: `
+              try {
+                // Disable mock mode on initial load
+                localStorage.setItem('mockMode', 'false');
+                console.log('Mock mode disabled at application start');
+              } catch (e) {
+                console.error('Error setting mock mode:', e);
+              }
+              `
+            }}
+          />
         </ClientLayout>
       </body>
     </html>
