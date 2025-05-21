@@ -8,6 +8,8 @@ import { Connection, PublicKey, Transaction, SystemProgram } from '@solana/web3.
 import { getBotStatus, setBotStatus, isBotActive, saveBotRisk, getBotRisk } from '@/lib/botState';
 import { useFavoriteBots } from '@/hooks/useFavoriteBots';
 import { markBotForTrading } from '@/lib/trading/mockHandler';
+import { useSimulation } from '@/hooks/useSimulation';
+import SimulationSection from './SimulationSection';
 
 interface BotCardProps {
   id: string;
@@ -60,6 +62,9 @@ const BotCard: FC<BotCardProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [botStatus, setBotStatusState] = useState<'active' | 'paused'>(getBotStatus(id));
   const [isFavorite, setIsFavorite] = useState(false);
+  
+  // Lade Simulationsdaten für diesen Bot
+  const { simulation, error: simulationError } = useSimulation(id);
   
   // Stelle sicher, dass der Status beim ersten Laden gesetzt wird
   useEffect(() => {
@@ -376,6 +381,7 @@ const BotCard: FC<BotCardProps> = ({
             </div>
           </div>
         </div>
+        <SimulationSection simulation={simulation} error={simulationError} />
         <div className="mb-4 sm:mb-6">
           <h4 className="text-sm sm:text-lg font-semibold mb-1 sm:mb-2">Strategy</h4>
           <p className="text-xs sm:text-sm text-white/80 line-clamp-3 hover:line-clamp-none transition-all duration-300">{strategy}</p>
