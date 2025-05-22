@@ -3,7 +3,7 @@
 import React, { FC, useState, useEffect } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
-import { LineChart, Line, ResponsiveContainer, Tooltip, YAxis } from 'recharts';
+import { LineChart, Line, ResponsiveContainer, Tooltip, YAxis, XAxis, Area, AreaChart } from 'recharts';
 import { Connection, PublicKey, Transaction, SystemProgram } from '@solana/web3.js';
 import { getBotStatus, setBotStatus, isBotActive, saveBotRisk, getBotRisk } from '@/lib/botState';
 import { useFavoriteBots } from '@/hooks/useFavoriteBots';
@@ -62,6 +62,8 @@ const BotCard: FC<BotCardProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [botStatus, setBotStatusState] = useState<'active' | 'paused'>(getBotStatus(id));
   const [isFavorite, setIsFavorite] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
+  const [isVisible, setIsVisible] = useState(false);
   
   // Lade Simulationsdaten für diesen Bot mit Echtdaten, falls verfügbar
   const { 
@@ -70,7 +72,13 @@ const BotCard: FC<BotCardProps> = ({
     dataSource,
     toggleDataSource
   } = useSimulation(id, true); // true = Echtdaten bevorzugen
-  
+
+  // Animation beim Mount
+  useEffect(() => {
+    const timer = setTimeout(() => setIsVisible(true), 100);
+    return () => clearTimeout(timer);
+  }, []);
+
   // Stelle sicher, dass der Status beim ersten Laden gesetzt wird
   useEffect(() => {
     setBotStatusState(getBotStatus(id));
@@ -164,47 +172,44 @@ const BotCard: FC<BotCardProps> = ({
 
   // Performance-Daten aus der Simulation generieren
   const getPerformanceData = () => {
-    // Wenn keine Simulationsdaten verfügbar sind, leeres Array zurückgeben
     if (!simulation.dailyData || simulation.dailyData.length === 0) {
       return [];
     }
 
     if (performanceTimeframe === '7d') {
-      // 7-Tage-Daten direkt aus der Simulation verwenden
       return simulation.dailyData.map(item => ({
         date: item.date,
-        profit: ((item.value - 100) / 100) * riskPercentage / 10
+        profit: ((item.value - 100) / 100) * riskPercentage / 10,
+        value: item.value
       }));
     } else {
-      // Für 30 Tage: 7-Tage-Daten hochrechnen/extrapolieren
       const sevenDayData = simulation.dailyData;
       const result = [];
       
-      // Zuerst die vorhandenen 7-Tage-Daten kopieren
       for (const item of sevenDayData) {
         result.push({
           date: item.date,
-          profit: ((item.value - 100) / 100) * riskPercentage / 10
+          profit: ((item.value - 100) / 100) * riskPercentage / 10,
+          value: item.value
         });
       }
       
-      // Dann die restlichen Tage durch Wiederholung des 7-Tage-Musters ergänzen
       if (sevenDayData.length > 0) {
         const now = new Date();
         const lastDate = new Date(sevenDayData[sevenDayData.length - 1].date);
         
-        for (let i = 1; i <= 23; i++) {  // 30 - 7 = 23 weitere Tage
+        for (let i = 1; i <= 23; i++) {
           const nextDate = new Date(lastDate);
           nextDate.setDate(nextDate.getDate() + i);
           
-          // Profit vom entsprechenden Tag in der 7-Tage-Periode nehmen (zyklisch)
           const sourceIndex = i % sevenDayData.length;
           const sourceData = sevenDayData[sourceIndex];
           const projectedValue = ((sourceData.value - 100) / 100) * riskPercentage / 10;
           
           result.push({
             date: nextDate.toISOString().split('T')[0],
-            profit: projectedValue
+            profit: projectedValue,
+            value: sourceData.value
           });
         }
       }
@@ -225,6 +230,15 @@ const BotCard: FC<BotCardProps> = ({
       case 'moderate': return 'text-yellow-400';
       case 'high': return 'text-red-400';
       default: return 'text-white';
+    }
+  };
+
+  const getRiskGradient = (risk: string) => {
+    switch (risk) {
+      case 'low': return 'from-green-400 to-emerald-500';
+      case 'moderate': return 'from-yellow-400 to-orange-500';
+      case 'high': return 'from-red-400 to-rose-500';
+      default: return 'from-primary to-secondary';
     }
   };
 
@@ -309,7 +323,26 @@ const BotCard: FC<BotCardProps> = ({
   };
 
   return (
-    <div className="flex flex-col bg-dark-light rounded-xl p-4 sm:p-6 hover:shadow-lg transition-all duration-300 border border-dark-lighter hover:border-primary h-full relative">
+    <div 
+      className={`group relative bot-card p-6 h-full transition-all duration-700 ${
+        isVisible ? 'animate-fade-in-up' : 'opacity-0 translate-y-8'
+      } ${isHovered ? 'glow-effect' : ''}`}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      {/* Status Indicator */}
+      <div className="absolute top-4 right-4 flex items-center gap-2">
+        <div className={`w-3 h-3 rounded-full ${
+          botStatus === 'active' ? 'bg-green-400 animate-pulse shadow-lg shadow-green-400/50' : 'bg-gray-500'
+        }`}></div>
+        <span className={`text-xs font-medium ${
+          botStatus === 'active' ? 'text-green-400' : 'text-gray-400'
+        }`}>
+          {botStatus === 'active' ? 'ACTIVE' : 'PAUSED'}
+        </span>
+      </div>
+
+      {/* Favorite Button */}
       {showFavoriteButton && connected && (
         <button
           onClick={(e) => {
@@ -317,187 +350,239 @@ const BotCard: FC<BotCardProps> = ({
             toggleFavorite(id);
             setIsFavorite(!isFavorite);
           }}
-          className="absolute top-4 right-4 z-10 text-xl hover:scale-110 transition-transform"
+          className="absolute top-4 left-4 z-10 text-xl hover:scale-125 transition-all duration-300"
           aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
         >
           {isFavorite ? (
-            <span className="text-yellow-400">★</span>
+            <span className="text-yellow-400 drop-shadow-lg">★</span>
           ) : (
-            <span className="text-white/60 hover:text-yellow-400">☆</span>
+            <span className="text-white/40 hover:text-yellow-400">☆</span>
           )}
         </button>
       )}
       
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2 sm:gap-0 mb-4">
-        <h3 className="text-xl sm:text-2xl font-bold text-primary bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary/70">{name}</h3>
-        <div className={`${getRiskColor(riskLevel)} text-sm sm:text-base font-semibold`}>
-          {riskLevel.charAt(0).toUpperCase() + riskLevel.slice(1)} Risk
+      {/* Header */}
+      <div className="flex flex-col mb-6">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-2xl font-black bg-gradient-to-r from-white to-white/80 bg-clip-text text-transparent">
+            {name}
+          </h3>
+          <div className={`px-3 py-1 rounded-full text-xs font-bold bg-gradient-to-r ${getRiskGradient(riskLevel)} text-black`}>
+            {riskLevel.charAt(0).toUpperCase() + riskLevel.slice(1)} Risk
+          </div>
+        </div>
+        <p className="text-white/70 text-sm leading-relaxed line-clamp-2 hover:line-clamp-none transition-all duration-300">
+          {description}
+        </p>
+      </div>
+
+      {/* Performance Stats */}
+      <div className="grid grid-cols-2 gap-3 mb-6">
+        <div className="stat-card group-hover:scale-105 transition-all duration-300">
+          <p className="text-xs text-white/50 font-medium">Weekly Return</p>
+          <p className="text-xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+            {simulation && !simulation.isLoading 
+              ? ((simulation.profitPercentage / 100) * riskPercentage).toFixed(2) + '%'
+              : weeklyReturn}
+          </p>
+        </div>
+        <div className="stat-card group-hover:scale-105 transition-all duration-300">
+          <p className="text-xs text-white/50 font-medium">Monthly Return</p>
+          <p className="text-xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+            {simulation && !simulation.isLoading 
+              ? ((simulation.profitPercentage / 100) * riskPercentage * 4.3).toFixed(2) + '%'
+              : monthlyReturn}
+          </p>
+        </div>
+        <div className="stat-card group-hover:scale-105 transition-all duration-300">
+          <p className="text-xs text-white/50 font-medium">Trades (30d)</p>
+          <p className="text-xl font-bold text-white">
+            {simulation && !simulation.isLoading 
+              ? Math.round(simulation.tradeCount * 4.3)
+              : trades}
+          </p>
+        </div>
+        <div className="stat-card group-hover:scale-105 transition-all duration-300">
+          <p className="text-xs text-white/50 font-medium">Success Rate</p>
+          <p className="text-xl font-bold text-white">
+            {simulation && !simulation.isLoading 
+              ? simulation.successRate.toFixed(0) + '%'
+              : winRate}
+          </p>
         </div>
       </div>
-      
-      <div className="mt-2">
-        <p className="text-sm sm:text-base text-white/80 mb-4 sm:mb-6 line-clamp-3 hover:line-clamp-none transition-all duration-300">{description}</p>
-        <div className="grid grid-cols-2 gap-2 sm:gap-4 mb-4 sm:mb-6">
-          <div className="stat-card bg-dark-lighter p-2 sm:p-4 rounded-lg backdrop-blur-sm hover:scale-105 transition-transform duration-300">
-            <p className="text-xs sm:text-sm text-white/60">Weekly Return</p>
-            <p className="text-base sm:text-2xl font-bold text-primary">
-              {simulation && !simulation.isLoading 
-                ? ((simulation.profitPercentage / 100) * riskPercentage).toFixed(2) + '%'
-                : weeklyReturn}
-            </p>
-          </div>
-          <div className="stat-card bg-dark-lighter p-2 sm:p-4 rounded-lg backdrop-blur-sm hover:scale-105 transition-transform duration-300">
-            <p className="text-xs sm:text-sm text-white/60">Monthly Return</p>
-            <p className="text-base sm:text-2xl font-bold text-primary">
-              {simulation && !simulation.isLoading 
-                ? ((simulation.profitPercentage / 100) * riskPercentage * 4.3).toFixed(2) + '%'
-                : monthlyReturn}
-            </p>
-          </div>
-          <div className="stat-card bg-dark-lighter p-2 sm:p-4 rounded-lg backdrop-blur-sm hover:scale-105 transition-transform duration-300">
-            <p className="text-xs sm:text-sm text-white/60">Trades (30d)</p>
-            <p className="text-base sm:text-2xl font-bold text-white">
-              {simulation && !simulation.isLoading 
-                ? Math.round(simulation.tradeCount * 4.3)
-                : trades}
-            </p>
-          </div>
-          <div className="stat-card bg-dark-lighter p-2 sm:p-4 rounded-lg backdrop-blur-sm hover:scale-105 transition-transform duration-300">
-            <p className="text-xs sm:text-sm text-white/60">Win Rate</p>
-            <p className="text-base sm:text-2xl font-bold text-white">
-              {simulation && !simulation.isLoading 
-                ? simulation.successRate.toFixed(0) + '%'
-                : winRate}
-            </p>
+
+      {/* Performance Chart */}
+      <div className="chart-container mb-6 group-hover:border-primary/50 transition-all duration-300">
+        <div className="flex justify-between items-center mb-3">
+          <h4 className="text-lg font-bold text-white">Performance</h4>
+          <div className="flex bg-white/5 rounded-lg p-1">
+            <button 
+              className={`px-3 py-1 rounded text-xs font-medium transition-all ${
+                performanceTimeframe === '7d' 
+                  ? 'bg-primary text-black shadow-lg' 
+                  : 'text-white/60 hover:text-white'
+              }`}
+              onClick={() => setPerformanceTimeframe('7d')}
+            >
+              7D
+            </button>
+            <button 
+              className={`px-3 py-1 rounded text-xs font-medium transition-all ${
+                performanceTimeframe === '30d' 
+                  ? 'bg-primary text-black shadow-lg' 
+                  : 'text-white/60 hover:text-white'
+              }`}
+              onClick={() => setPerformanceTimeframe('30d')}
+            >
+              30D
+            </button>
           </div>
         </div>
-        <div className="mb-4 sm:mb-6 bg-dark-lighter p-2 sm:p-4 rounded-lg">
-          <div className="flex justify-between items-center mb-2 sm:mb-3">
-            <h4 className="text-sm sm:text-lg font-semibold">Performance History</h4>
-            <div className="flex text-xs">
-              <button 
-                className={`px-2 py-1 rounded-l-md ${performanceTimeframe === '7d' ? 'bg-primary text-black' : 'bg-dark text-white/60'}`}
-                onClick={() => setPerformanceTimeframe('7d')}
-              >
-                7D
-              </button>
-              <button 
-                className={`px-2 py-1 rounded-r-md ${performanceTimeframe === '30d' ? 'bg-primary text-black' : 'bg-dark text-white/60'}`}
-                onClick={() => setPerformanceTimeframe('30d')}
-              >
-                30D
-              </button>
-            </div>
+        
+        <div className="h-32">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={performanceData}>
+              <defs>
+                <linearGradient id={`gradient-${id}`} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#14F195" stopOpacity={0.3}/>
+                  <stop offset="95%" stopColor="#14F195" stopOpacity={0}/>
+                </linearGradient>
+              </defs>
+              <XAxis 
+                dataKey="date" 
+                axisLine={false}
+                tickLine={false}
+                tick={false}
+              />
+              <YAxis 
+                domain={['dataMin', 'dataMax']} 
+                axisLine={false}
+                tickLine={false}
+                tick={false}
+              />
+              <Tooltip 
+                contentStyle={{ 
+                  backgroundColor: 'rgba(0,0,0,0.8)', 
+                  border: '1px solid rgba(20, 241, 149, 0.3)',
+                  borderRadius: '8px',
+                  fontSize: '12px'
+                }}
+                formatter={(value: number) => [`${value.toFixed(2)}%`, 'Return']}
+                labelFormatter={(label) => {
+                  const date = new Date(label);
+                  return date.toLocaleDateString(); 
+                }}
+              />
+              <Area 
+                type="monotone" 
+                dataKey="profit"
+                stroke="#14F195"
+                strokeWidth={2}
+                fill={`url(#gradient-${id})`}
+                dot={false}
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+        
+        <div className="flex justify-between mt-3 text-xs">
+          <div>
+            <span className="text-white/50">Total: </span>
+            <span className="text-primary font-bold">+{totalProfit}%</span>
           </div>
-          <div className="h-28 sm:h-36">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={performanceData}>
-                <YAxis 
-                  domain={['dataMin', 'dataMax']} 
-                  tickFormatter={(value) => `${value}%`} 
-                  width={30}
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{fill: '#999', fontSize: 10}}
-                />
-                <Tooltip 
-                  contentStyle={{ backgroundColor: '#1a1a1a', border: 'none' }}
-                  formatter={(value: number) => [`${value}%`, 'Daily Return']}
-                  labelFormatter={(label) => {
-                    const date = new Date(label);
-                    return `${date.toLocaleDateString()}`; 
-                  }}
-                />
-                <Line 
-                  type="monotone" 
-                  dataKey="profit"
-                  stroke="#10b981" 
-                  strokeWidth={2}
-                  dot={false}
-                  activeDot={{ r: 4 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="flex justify-between mt-2">
-            <div>
-              <p className="text-xs text-white/60">Total Return</p>
-              <p className="text-xs sm:text-sm font-semibold text-primary">+{totalProfit}%</p>
-            </div>
-            <div>
-              <p className="text-xs text-white/60">Daily Average</p>
-              <p className="text-xs sm:text-sm font-semibold text-primary">+{averageProfit}%</p>
-            </div>
+          <div>
+            <span className="text-white/50">Avg: </span>
+            <span className="text-primary font-bold">+{averageProfit}%</span>
           </div>
         </div>
-        <SimulationSection 
-          simulation={simulation} 
-          error={simulationError} 
-          dataSource={dataSource} 
-          onToggleDataSource={toggleDataSource}
-        />
-        <div className="mb-4 sm:mb-6">
-          <h4 className="text-sm sm:text-lg font-semibold mb-1 sm:mb-2">Strategy</h4>
-          <p className="text-xs sm:text-sm text-white/80 line-clamp-3 hover:line-clamp-none transition-all duration-300">{strategy}</p>
-        </div>
-        <div className="mb-4 sm:mb-6">
-          <h4 className="text-sm sm:text-lg font-semibold mb-1 sm:mb-2">Risk Management</h4>
-          <p className="text-xs sm:text-sm text-white/80 mb-2 sm:mb-3">{riskManagement}</p>
-          <div className="bg-dark-lighter p-2 sm:p-3 rounded-lg">
-            <div className="flex justify-between text-xs text-white/60 mb-1">
-              <span>Low Risk (1%)</span>
-              <span>High Risk (50%)</span>
-            </div>
+      </div>
+
+      {/* Simulation Section */}
+      <SimulationSection 
+        simulation={simulation} 
+        error={simulationError} 
+        dataSource={dataSource} 
+        onToggleDataSource={toggleDataSource}
+      />
+
+      {/* Strategy Section */}
+      <div className="mb-6">
+        <h4 className="text-lg font-bold mb-2 text-white">Strategy</h4>
+        <p className="text-white/70 text-sm line-clamp-2 hover:line-clamp-none transition-all duration-300">
+          {strategy}
+        </p>
+      </div>
+
+      {/* Risk Management */}
+      <div className="mb-6">
+        <h4 className="text-lg font-bold mb-3 text-white">Risk Management</h4>
+        <p className="text-white/70 text-sm mb-4">{riskManagement}</p>
+        <div className="bg-white/5 border border-white/10 rounded-xl p-4">
+          <div className="flex justify-between text-xs text-white/50 mb-2">
+            <span>Conservative (1%)</span>
+            <span>Aggressive (50%)</span>
+          </div>
+          <div className="relative">
             <input
               type="range"
               min="1"
               max="50"
               value={riskPercentage}
               onChange={handleRiskChange}
-              className="w-full h-2 bg-dark rounded-lg appearance-none cursor-pointer accent-primary"
+              className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer slider"
+              style={{
+                background: `linear-gradient(to right, #14F195 0%, #14F195 ${(riskPercentage / 50) * 100}%, rgba(255,255,255,0.1) ${(riskPercentage / 50) * 100}%, rgba(255,255,255,0.1) 100%)`
+              }}
             />
-            <div className="flex justify-center mt-1 sm:mt-2">
-              <span className="text-xs sm:text-sm text-primary font-medium">Current: {riskPercentage}% per trade</span>
-            </div>
+          </div>
+          <div className="flex justify-center mt-3">
+            <span className="text-sm bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent font-bold">
+              Current: {riskPercentage}% per trade
+            </span>
           </div>
         </div>
-        <div className="mt-auto">
-          {connected ? (
-            <div className="flex gap-2">
-              <button 
-                className={`flex-1 py-2 rounded ${
-                  isLoading ? 'bg-gray-600 cursor-not-allowed' :
-                  botStatus === 'active' ? 'bg-yellow-600 hover:bg-yellow-500' : 'bg-green-600 hover:bg-green-500'
-                } transition-colors text-white relative text-sm sm:text-base`}
-                onClick={activateBot}
-                disabled={isLoading}
-              >
-                {isLoading ? (
-                  <span className="flex items-center justify-center">
-                    <svg className="animate-spin h-4 w-4 sm:h-5 sm:w-5 mr-2" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                    </svg>
-                    Processing...
-                  </span>
-                ) : (
-                  botStatus === 'active' ? 'Pause' : 'Start'
-                )}
-              </button>
-              <button className="flex-1 py-2 rounded bg-blue-600 hover:bg-blue-500 transition-colors text-white text-sm sm:text-base">
-                Settings
-              </button>
-            </div>
-          ) : (
-            <WalletMultiButton className="w-full py-2 sm:py-3 justify-center text-sm sm:text-base hover:scale-105 transition-transform duration-300" />
-          )}
-        </div>
-        {error && (
-          <div className="mt-2 text-red-500 text-sm">
-            {error}
+      </div>
+
+      {/* Action Buttons */}
+      <div className="mt-auto">
+        {connected ? (
+          <div className="flex gap-3">
+            <button 
+              className={`flex-1 py-3 px-4 rounded-xl font-bold text-sm transition-all duration-300 ${
+                isLoading 
+                  ? 'bg-gray-600 cursor-not-allowed' 
+                  : botStatus === 'active' 
+                    ? 'bg-gradient-to-r from-yellow-400 to-orange-500 text-black hover:scale-105 hover:shadow-lg hover:shadow-yellow-400/25' 
+                    : 'bg-gradient-to-r from-primary to-secondary text-black hover:scale-105 hover:shadow-lg hover:shadow-primary/25'
+              }`}
+              onClick={activateBot}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <div className="loading-spinner"></div>
+                  Processing...
+                </span>
+              ) : (
+                botStatus === 'active' ? 'Pause Bot' : 'Start Bot'
+              )}
+            </button>
+            <button className="px-4 py-3 bg-white/10 hover:bg-white/20 border border-white/20 hover:border-primary/50 text-white font-bold text-sm rounded-xl transition-all duration-300 hover:scale-105">
+              ⚙️
+            </button>
           </div>
+        ) : (
+          <WalletMultiButton className="!w-full !py-3 !justify-center !bg-gradient-to-r !from-primary !to-secondary !text-black !font-bold !rounded-xl !transition-all !duration-300 hover:!scale-105" />
         )}
       </div>
+
+      {/* Error Display */}
+      {error && (
+        <div className="mt-3 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm">
+          {error}
+        </div>
+      )}
     </div>
   );
 };
