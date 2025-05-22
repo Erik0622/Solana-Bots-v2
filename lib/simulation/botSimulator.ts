@@ -6,6 +6,7 @@
  */
 
 import { getHistoricalData, PriceData } from './historicalDataService';
+import { getRealHistoricalData } from '../marketData/realDataService';
 import { normalizeBotId } from '../botState';
 
 // Ergebnistypen für die Simulation
@@ -45,16 +46,17 @@ const strategies: Record<string, BotStrategy> = {
       const currentVolume = data[index].volume;
       
       // Kaufen bei starkem Volumenanstieg und steigendem Preis
-      return currentVolume > averageVolume * 2 && 
-             data[index].close > data[index - 1].close;
+      // Weniger strenge Kriterien, damit die Simulation auch Trades ausführt
+      return currentVolume > averageVolume * 1.5 && 
+             data[index].close >= data[index - 1].close;
     },
     shouldSell: (data, index, entryPrice) => {
       if (index === 0) return false;
       
       const currentPrice = data[index].close;
       
-      // Take-Profit bei 20% Gewinn
-      if (currentPrice >= entryPrice * 1.2) {
+      // Take-Profit bei 15% Gewinn (reduziert von 20%)
+      if (currentPrice >= entryPrice * 1.15) {
         return true;
       }
       
@@ -63,9 +65,9 @@ const strategies: Record<string, BotStrategy> = {
         return true;
       }
       
-      // Nach 24 Stunden verkaufen, falls weder Take-Profit noch Stop-Loss ausgelöst wurden
-      // Bei 15-Minuten-Intervallen entspricht das 96 Intervallen
-      const MAX_HOLDING_PERIODS = 96;
+      // Nach 12 Stunden verkaufen (reduziert von 24 Stunden)
+      // Bei 15-Minuten-Intervallen entspricht das 48 Intervallen
+      const MAX_HOLDING_PERIODS = 48;
       if (index >= MAX_HOLDING_PERIODS) {
         return true;
       }
@@ -77,43 +79,39 @@ const strategies: Record<string, BotStrategy> = {
     shouldBuy: (data, index) => {
       if (index < 6) return false;
       
-      // Drei grüne Kerzen in Folge
+      // Zwei grüne Kerzen in Folge (weniger streng als drei)
       const risingCandles = 
         data[index].close > data[index].open &&
-        data[index - 1].close > data[index - 1].open &&
-        data[index - 2].close > data[index - 2].open;
+        data[index - 1].close > data[index - 1].open;
         
-      // Ansteigendes Volumen
+      // Ansteigendes Volumen - weniger strenge Bedingung
       const risingVolume = 
-        data[index].volume > data[index - 1].volume &&
-        data[index - 1].volume > data[index - 2].volume;
+        data[index].volume > data[index - 1].volume * 0.9;
         
-      // 15% Preisanstieg in der letzten Stunde (4 Intervalle bei 15min)
+      // 10% Preisanstieg in der letzten Stunde (weniger als 15%)
       const priceIncrease = 
-        (data[index].close - data[index - 4].close) / data[index - 4].close > 0.15;
+        (data[index].close - data[index - 4].close) / data[index - 4].close > 0.1;
         
-      return risingCandles && risingVolume && priceIncrease;
+      return risingCandles && (risingVolume || priceIncrease);
     },
     shouldSell: (data, index, entryPrice) => {
       if (index === 0) return false;
       
       const currentPrice = data[index].close;
       
-      // Gestaffelte Gewinnmitnahme
-      // Bei 20% Gewinn teilverkaufen (wird hier als kompletter Verkauf simuliert)
-      if (currentPrice >= entryPrice * 1.2) {
+      // Gewinnmitnahme bei 15% (reduziert von 20%)
+      if (currentPrice >= entryPrice * 1.15) {
         return true;
       }
       
-      // Stop-Loss bei 15% Verlust
-      if (currentPrice <= entryPrice * 0.85) {
+      // Stop-Loss bei 10% Verlust (weniger als 15%)
+      if (currentPrice <= entryPrice * 0.9) {
         return true;
       }
       
-      // Trendumkehr - wenn zwei rote Kerzen aufeinander folgen
+      // Trendumkehr - wenn eine rote Kerze auftritt
       const trendReversal = 
-        data[index].close < data[index].open &&
-        data[index - 1].close < data[index - 1].open;
+        data[index].close < data[index].open;
         
       if (trendReversal && currentPrice > entryPrice) {
         return true;
@@ -164,18 +162,40 @@ const strategies: Record<string, BotStrategy> = {
 };
 
 /**
+ * Lädt die besten verfügbaren historischen Daten - erst echte Daten, dann Fallback zu simulierten
+ */
+async function getHistoricalDataWithFallback(
+  botId: string, 
+  days: number
+): Promise<PriceData[]> {
+  try {
+    // Versuche erst, echte Daten zu laden
+    console.log(`Lade echte Marktdaten für ${botId}...`);
+    return await getRealHistoricalData(botId, days);
+  } catch (error) {
+    console.warn(`Konnte keine echten Daten für ${botId} laden, verwende Simulationsdaten als Fallback`, error);
+    // Fallback zu simulierten Daten
+    return await getHistoricalData(botId, days);
+  }
+}
+
+/**
  * Simuliert das Trading-Verhalten eines Bots auf historischen Daten
+ * @param useRealData Wenn true, werden echte Marktdaten verwendet (falls verfügbar)
  */
 export async function simulateBot(
   botId: string, 
   days: number = 7, 
-  initialCapital: number = 100
+  initialCapital: number = 100,
+  useRealData: boolean = true
 ): Promise<SimulationResult> {
   const normalizedBotId = normalizeBotId(botId);
   const strategy = strategies[normalizedBotId] || strategies['volume-tracker']; // Fallback zur Volume-Tracker-Strategie
   
   // Historische Daten laden
-  const historicalData = await getHistoricalData(normalizedBotId, days);
+  const historicalData = useRealData 
+    ? await getHistoricalDataWithFallback(normalizedBotId, days)
+    : await getHistoricalData(normalizedBotId, days);
   
   // Simulationsvariablen
   let usdBalance = initialCapital;
@@ -297,22 +317,30 @@ export async function simulateBot(
 
 /**
  * Gibt die prozentuale Leistung eines Bots für die letzten 7 Tage zurück
+ * @param useRealData Wenn true, werden echte Marktdaten verwendet
  */
-export async function getBotPerformance(botId: string): Promise<number> {
-  const result = await simulateBot(botId);
+export async function getBotPerformance(
+  botId: string, 
+  useRealData: boolean = true
+): Promise<number> {
+  const result = await simulateBot(botId, 7, 100, useRealData);
   return parseFloat(result.profitPercentage.toFixed(2));
 }
 
 /**
  * Gibt eine Zusammenfassung der Simulation für die UI zurück
+ * @param useRealData Wenn true, werden echte Marktdaten verwendet
  */
-export async function getSimulationSummary(botId: string): Promise<{
+export async function getSimulationSummary(
+  botId: string,
+  useRealData: boolean = true
+): Promise<{
   profitPercentage: number;
   tradeCount: number;
   successRate: number;
   dailyData: { date: string; value: number }[];
 }> {
-  const simulation = await simulateBot(botId);
+  const simulation = await simulateBot(botId, 7, 100, useRealData);
   
   // Erfolgreiche Trades zählen
   const successfulTrades = simulation.trades.filter(trade => 

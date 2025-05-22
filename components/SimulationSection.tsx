@@ -5,9 +5,16 @@ import { SimulationSummary } from '@/hooks/useSimulation';
 interface SimulationSectionProps {
   simulation: SimulationSummary;
   error: string | null;
+  dataSource?: 'real' | 'simulated';
+  onToggleDataSource?: () => void;
 }
 
-const SimulationSection: React.FC<SimulationSectionProps> = ({ simulation, error }) => {
+const SimulationSection: React.FC<SimulationSectionProps> = ({ 
+  simulation, 
+  error, 
+  dataSource = 'simulated',
+  onToggleDataSource
+}) => {
   const { profitPercentage, tradeCount, successRate, dailyData, isLoading } = simulation;
   
   if (isLoading) {
@@ -51,7 +58,18 @@ const SimulationSection: React.FC<SimulationSectionProps> = ({ simulation, error
   
   return (
     <div className="mb-4 sm:mb-6 bg-dark-lighter p-2 sm:p-4 rounded-lg">
-      <h4 className="text-sm sm:text-lg font-semibold mb-2">7-Tage Simulation (100$ Startkapital)</h4>
+      <div className="flex justify-between items-center mb-2">
+        <h4 className="text-sm sm:text-lg font-semibold">7-Tage Simulation (100$ Startkapital)</h4>
+        
+        {onToggleDataSource && (
+          <button 
+            onClick={onToggleDataSource}
+            className="text-xs bg-dark px-2 py-1 rounded-md hover:bg-primary hover:text-black transition-colors"
+          >
+            {dataSource === 'real' ? '🌐 Echtdaten' : '🧪 Simuliert'}
+          </button>
+        )}
+      </div>
       
       <div className="grid grid-cols-3 gap-2 mb-3 text-center">
         <div className="bg-dark p-2 rounded">
@@ -108,6 +126,9 @@ const SimulationSection: React.FC<SimulationSectionProps> = ({ simulation, error
       
       <div className="mt-2 text-xs text-center text-white/60">
         <p>Alle Trades mit 1% Transaktionsgebühr</p>
+        <p className="mt-1">
+          Datenquelle: {dataSource === 'real' ? 'Echte Marktdaten' : 'Simulierte Daten'}
+        </p>
       </div>
     </div>
   );

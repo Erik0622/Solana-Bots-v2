@@ -11,7 +11,7 @@ export interface SimulationSummary {
   isLoading: boolean;
 }
 
-export const useSimulation = (botId: string) => {
+export const useSimulation = (botId: string, useRealData: boolean = true) => {
   const [simulation, setSimulation] = useState<SimulationSummary>({
     profitPercentage: 0,
     tradeCount: 0,
@@ -21,6 +21,7 @@ export const useSimulation = (botId: string) => {
   });
   
   const [error, setError] = useState<string | null>(null);
+  const [dataSource, setDataSource] = useState<'real' | 'simulated'>(useRealData ? 'real' : 'simulated');
   
   useEffect(() => {
     let isMounted = true;
@@ -28,9 +29,11 @@ export const useSimulation = (botId: string) => {
     const loadSimulation = async () => {
       try {
         setError(null);
+        setSimulation(prev => ({ ...prev, isLoading: true }));
         
         // Simulationsergebnisse laden
-        const result = await getSimulationSummary(botId);
+        console.log(`Loading ${dataSource === 'real' ? 'real' : 'simulated'} data for bot ${botId}`);
+        const result = await getSimulationSummary(botId, dataSource === 'real');
         
         if (isMounted) {
           setSimulation({
@@ -43,6 +46,12 @@ export const useSimulation = (botId: string) => {
         if (isMounted) {
           setError('Simulationsdaten konnten nicht geladen werden.');
           setSimulation(prev => ({ ...prev, isLoading: false }));
+          
+          // Bei Fehler mit echten Daten auf simulierte Daten zurückfallen
+          if (dataSource === 'real') {
+            console.warn('Fallback auf simulierte Daten nach Fehler mit echten Daten');
+            setDataSource('simulated');
+          }
         }
       }
     };
@@ -52,15 +61,23 @@ export const useSimulation = (botId: string) => {
     return () => {
       isMounted = false;
     };
-  }, [botId]);
+  }, [botId, dataSource]);
   
   return {
     simulation,
     error,
+    dataSource,
+    // Wechsel zwischen echten und simulierten Daten ermöglichen
+    toggleDataSource: () => {
+      setDataSource(prev => prev === 'real' ? 'simulated' : 'real');
+    },
+    setDataSource: (source: 'real' | 'simulated') => {
+      setDataSource(source);
+    },
     refreshSimulation: async () => {
       setSimulation(prev => ({ ...prev, isLoading: true }));
       try {
-        const result = await getSimulationSummary(botId);
+        const result = await getSimulationSummary(botId, dataSource === 'real');
         setSimulation({
           ...result,
           isLoading: false
@@ -70,6 +87,12 @@ export const useSimulation = (botId: string) => {
         console.error('Fehler beim Aktualisieren der Simulation:', err);
         setError('Simulationsdaten konnten nicht aktualisiert werden.');
         setSimulation(prev => ({ ...prev, isLoading: false }));
+        
+        // Bei Fehler mit echten Daten auf simulierte Daten zurückfallen
+        if (dataSource === 'real') {
+          console.warn('Fallback auf simulierte Daten nach Fehler mit Refresh');
+          setDataSource('simulated');
+        }
       }
     }
   };

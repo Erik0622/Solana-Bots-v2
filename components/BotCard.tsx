@@ -63,8 +63,13 @@ const BotCard: FC<BotCardProps> = ({
   const [botStatus, setBotStatusState] = useState<'active' | 'paused'>(getBotStatus(id));
   const [isFavorite, setIsFavorite] = useState(false);
   
-  // Lade Simulationsdaten für diesen Bot
-  const { simulation, error: simulationError } = useSimulation(id);
+  // Lade Simulationsdaten für diesen Bot mit Echtdaten, falls verfügbar
+  const { 
+    simulation, 
+    error: simulationError, 
+    dataSource,
+    toggleDataSource
+  } = useSimulation(id, true); // true = Echtdaten bevorzugen
   
   // Stelle sicher, dass der Status beim ersten Laden gesetzt wird
   useEffect(() => {
@@ -157,34 +162,62 @@ const BotCard: FC<BotCardProps> = ({
     }
   };
 
-  // Set initial random seed for performance data
-  const [dataSeed] = useState(() => Math.random());
-  
-  const generatePerformanceData = (days: number) => {
-    const data = [];
-    const now = new Date();
-    const getProfit = (i: number) => {
-      switch (id) {
-        case 'volume-tracker': return 0.4 + (Math.sin(i * 0.5 + dataSeed * 10) * 0.3) + (dataSeed * 0.2);
-        case 'trend-surfer': return 0.7 + (Math.sin(i * 0.3 + dataSeed * 10) * 0.5) + (dataSeed * 0.3);
-        case 'dip-hunter': return 0.3 + (Math.cos(i * 0.2 + dataSeed * 10) * 0.1) + (dataSeed * 0.1);
-        default: return 0.5 + (dataSeed * 0.3);
-      }
-    };
-    for (let i = days; i >= 0; i--) {
-      const date = new Date(now);
-      date.setDate(date.getDate() - i);
-      let baseProfit = getProfit(i);
-      const scalingFactor = riskPercentage / 15;
-      const profit = baseProfit * scalingFactor;
-      data.push({ date: date.toISOString().split('T')[0], profit: parseFloat(profit.toFixed(2)) });
+  // Performance-Daten aus der Simulation generieren
+  const getPerformanceData = () => {
+    // Wenn keine Simulationsdaten verfügbar sind, leeres Array zurückgeben
+    if (!simulation.dailyData || simulation.dailyData.length === 0) {
+      return [];
     }
-    return data;
+
+    if (performanceTimeframe === '7d') {
+      // 7-Tage-Daten direkt aus der Simulation verwenden
+      return simulation.dailyData.map(item => ({
+        date: item.date,
+        profit: ((item.value - 100) / 100) * riskPercentage / 10
+      }));
+    } else {
+      // Für 30 Tage: 7-Tage-Daten hochrechnen/extrapolieren
+      const sevenDayData = simulation.dailyData;
+      const result = [];
+      
+      // Zuerst die vorhandenen 7-Tage-Daten kopieren
+      for (const item of sevenDayData) {
+        result.push({
+          date: item.date,
+          profit: ((item.value - 100) / 100) * riskPercentage / 10
+        });
+      }
+      
+      // Dann die restlichen Tage durch Wiederholung des 7-Tage-Musters ergänzen
+      if (sevenDayData.length > 0) {
+        const now = new Date();
+        const lastDate = new Date(sevenDayData[sevenDayData.length - 1].date);
+        
+        for (let i = 1; i <= 23; i++) {  // 30 - 7 = 23 weitere Tage
+          const nextDate = new Date(lastDate);
+          nextDate.setDate(nextDate.getDate() + i);
+          
+          // Profit vom entsprechenden Tag in der 7-Tage-Periode nehmen (zyklisch)
+          const sourceIndex = i % sevenDayData.length;
+          const sourceData = sevenDayData[sourceIndex];
+          const projectedValue = ((sourceData.value - 100) / 100) * riskPercentage / 10;
+          
+          result.push({
+            date: nextDate.toISOString().split('T')[0],
+            profit: projectedValue
+          });
+        }
+      }
+      
+      return result;
+    }
   };
   
-  const performanceData = performanceTimeframe === '7d' ? generatePerformanceData(7) : generatePerformanceData(30);
+  const performanceData = getPerformanceData();
   const totalProfit = performanceData.reduce((sum, day) => sum + day.profit, 0).toFixed(2);
-  const averageProfit = (performanceData.reduce((sum, day) => sum + day.profit, 0) / performanceData.length).toFixed(2);
+  const averageProfit = performanceData.length > 0 
+    ? (performanceData.reduce((sum, day) => sum + day.profit, 0) / performanceData.length).toFixed(2)
+    : '0.00';
 
   const getRiskColor = (risk: string) => {
     switch (risk) {
@@ -307,19 +340,35 @@ const BotCard: FC<BotCardProps> = ({
         <div className="grid grid-cols-2 gap-2 sm:gap-4 mb-4 sm:mb-6">
           <div className="stat-card bg-dark-lighter p-2 sm:p-4 rounded-lg backdrop-blur-sm hover:scale-105 transition-transform duration-300">
             <p className="text-xs sm:text-sm text-white/60">Weekly Return</p>
-            <p className="text-base sm:text-2xl font-bold text-primary">{weeklyReturn}</p>
+            <p className="text-base sm:text-2xl font-bold text-primary">
+              {simulation && !simulation.isLoading 
+                ? ((simulation.profitPercentage / 100) * riskPercentage).toFixed(2) + '%'
+                : weeklyReturn}
+            </p>
           </div>
           <div className="stat-card bg-dark-lighter p-2 sm:p-4 rounded-lg backdrop-blur-sm hover:scale-105 transition-transform duration-300">
             <p className="text-xs sm:text-sm text-white/60">Monthly Return</p>
-            <p className="text-base sm:text-2xl font-bold text-primary">{monthlyReturn}</p>
+            <p className="text-base sm:text-2xl font-bold text-primary">
+              {simulation && !simulation.isLoading 
+                ? ((simulation.profitPercentage / 100) * riskPercentage * 4.3).toFixed(2) + '%'
+                : monthlyReturn}
+            </p>
           </div>
           <div className="stat-card bg-dark-lighter p-2 sm:p-4 rounded-lg backdrop-blur-sm hover:scale-105 transition-transform duration-300">
             <p className="text-xs sm:text-sm text-white/60">Trades (30d)</p>
-            <p className="text-base sm:text-2xl font-bold text-white">{trades}</p>
+            <p className="text-base sm:text-2xl font-bold text-white">
+              {simulation && !simulation.isLoading 
+                ? Math.round(simulation.tradeCount * 4.3)
+                : trades}
+            </p>
           </div>
           <div className="stat-card bg-dark-lighter p-2 sm:p-4 rounded-lg backdrop-blur-sm hover:scale-105 transition-transform duration-300">
             <p className="text-xs sm:text-sm text-white/60">Win Rate</p>
-            <p className="text-base sm:text-2xl font-bold text-white">{winRate}</p>
+            <p className="text-base sm:text-2xl font-bold text-white">
+              {simulation && !simulation.isLoading 
+                ? simulation.successRate.toFixed(0) + '%'
+                : winRate}
+            </p>
           </div>
         </div>
         <div className="mb-4 sm:mb-6 bg-dark-lighter p-2 sm:p-4 rounded-lg">
@@ -381,7 +430,12 @@ const BotCard: FC<BotCardProps> = ({
             </div>
           </div>
         </div>
-        <SimulationSection simulation={simulation} error={simulationError} />
+        <SimulationSection 
+          simulation={simulation} 
+          error={simulationError} 
+          dataSource={dataSource} 
+          onToggleDataSource={toggleDataSource}
+        />
         <div className="mb-4 sm:mb-6">
           <h4 className="text-sm sm:text-lg font-semibold mb-1 sm:mb-2">Strategy</h4>
           <p className="text-xs sm:text-sm text-white/80 line-clamp-3 hover:line-clamp-none transition-all duration-300">{strategy}</p>
