@@ -31,7 +31,7 @@ export const useSimulation = (botId: string, useRealData: boolean = true) => {
         setError(null);
         setSimulation(prev => ({ ...prev, isLoading: true }));
         
-        // Simulationsergebnisse laden
+        // Load simulation results
         console.log(`Loading ${dataSource === 'real' ? 'real' : 'simulated'} data for bot ${botId}`);
         const result = await getSimulationSummary(botId, dataSource === 'real');
         
@@ -42,14 +42,14 @@ export const useSimulation = (botId: string, useRealData: boolean = true) => {
           });
         }
       } catch (err) {
-        console.error('Fehler beim Laden der Simulation:', err);
+        console.error('Error loading simulation:', err);
         if (isMounted) {
-          setError('Simulationsdaten konnten nicht geladen werden.');
+          setError('Could not load simulation data.');
           setSimulation(prev => ({ ...prev, isLoading: false }));
           
-          // Bei Fehler mit echten Daten auf simulierte Daten zurückfallen
+          // Fallback to simulated data on error with real data
           if (dataSource === 'real') {
-            console.warn('Fallback auf simulierte Daten nach Fehler mit echten Daten');
+            console.warn('Fallback to simulated data after error with real data');
             setDataSource('simulated');
           }
         }
@@ -67,7 +67,7 @@ export const useSimulation = (botId: string, useRealData: boolean = true) => {
     simulation,
     error,
     dataSource,
-    // Wechsel zwischen echten und simulierten Daten ermöglichen
+    // Allow switching between real and simulated data
     toggleDataSource: () => {
       setDataSource(prev => prev === 'real' ? 'simulated' : 'real');
     },
@@ -84,13 +84,13 @@ export const useSimulation = (botId: string, useRealData: boolean = true) => {
         });
         setError(null);
       } catch (err) {
-        console.error('Fehler beim Aktualisieren der Simulation:', err);
-        setError('Simulationsdaten konnten nicht aktualisiert werden.');
+        console.error('Error updating simulation:', err);
+        setError('Could not update simulation data.');
         setSimulation(prev => ({ ...prev, isLoading: false }));
         
-        // Bei Fehler mit echten Daten auf simulierte Daten zurückfallen
+        // Fallback to simulated data on error with real data
         if (dataSource === 'real') {
-          console.warn('Fallback auf simulierte Daten nach Fehler mit Refresh');
+          console.warn('Fallback to simulated data after refresh error');
           setDataSource('simulated');
         }
       }

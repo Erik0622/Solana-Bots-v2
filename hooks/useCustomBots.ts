@@ -23,6 +23,8 @@ export interface CustomBot {
   createdAt: string;
   walletAddress: string;
   code?: string; // Optional field for storing the generated code
+  tradingStyle?: string;
+  timeframe?: string;
 }
 
 export const useCustomBots = () => {
@@ -37,51 +39,73 @@ export const useCustomBots = () => {
         setCustomBots(JSON.parse(storedBots));
       }
     } else {
-      setCustomBots([]);
+      // Lade Guest Bots wenn keine Wallet verbunden
+      const guestBots = localStorage.getItem('customBots_guest');
+      if (guestBots) {
+        setCustomBots(JSON.parse(guestBots));
+      } else {
+        setCustomBots([]);
+      }
     }
   }, [publicKey]);
 
   // Speichere einen neuen Bot
   const saveBot = (bot: Omit<CustomBot, 'walletAddress' | 'createdAt'>) => {
-    if (!publicKey) return;
-
     const newBot: CustomBot = {
       ...bot,
       createdAt: new Date().toISOString(),
-      walletAddress: publicKey.toString(),
+      walletAddress: publicKey?.toString() || 'guest',
     };
 
     const updatedBots = [...customBots, newBot];
     setCustomBots(updatedBots);
-    localStorage.setItem(`customBots_${publicKey.toString()}`, JSON.stringify(updatedBots));
+    
+    if (publicKey) {
+      localStorage.setItem(`customBots_${publicKey.toString()}`, JSON.stringify(updatedBots));
+    } else {
+      localStorage.setItem('customBots_guest', JSON.stringify(updatedBots));
+    }
+    
     return newBot;
   };
 
   // Aktualisiere einen bestehenden Bot
   const updateBot = (botId: string, updates: Partial<CustomBot>) => {
-    if (!publicKey) return;
-
     const updatedBots = customBots.map(bot => 
       bot.id === botId ? { ...bot, ...updates } : bot
     );
     
     setCustomBots(updatedBots);
-    localStorage.setItem(`customBots_${publicKey.toString()}`, JSON.stringify(updatedBots));
+    
+    if (publicKey) {
+      localStorage.setItem(`customBots_${publicKey.toString()}`, JSON.stringify(updatedBots));
+    } else {
+      localStorage.setItem('customBots_guest', JSON.stringify(updatedBots));
+    }
   };
 
   // Lösche einen Bot
   const deleteBot = (botId: string) => {
-    if (!publicKey) return;
-
     const updatedBots = customBots.filter(bot => bot.id !== botId);
     setCustomBots(updatedBots);
-    localStorage.setItem(`customBots_${publicKey.toString()}`, JSON.stringify(updatedBots));
+    
+    if (publicKey) {
+      localStorage.setItem(`customBots_${publicKey.toString()}`, JSON.stringify(updatedBots));
+    } else {
+      localStorage.setItem('customBots_guest', JSON.stringify(updatedBots));
+    }
+  };
+
+  // Hole alle Bots (auch ohne Wallet für Anzeige)
+  const getBots = () => {
+    return customBots;
   };
 
   return {
     customBots,
     saveBot,
     updateBot,
-    deleteBot
+    deleteBot,
+    getBots
   };
 }; 

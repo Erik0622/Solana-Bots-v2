@@ -1,40 +1,92 @@
 <svg width="200" height="200" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <!-- Hintergrund -->
-  <rect width="200" height="200" rx="40" fill="#1E1E3F"/>
-  
-  <!-- Äußerer Ring -->
-  <circle cx="100" cy="100" r="80" stroke="#14F195" stroke-width="8" stroke-opacity="0.9"/>
-  
-  <!-- Inneres Sechseck (Solana-Symbol) -->
-  <path d="M100 40L150 70V130L100 160L50 130V70L100 40Z" fill="#9945FF" fill-opacity="0.8"/>
-  
-  <!-- Robotergesicht -->
-  <rect x="70" y="85" width="60" height="50" rx="10" fill="#14F195" fill-opacity="0.7"/>
-  
-  <!-- Roboteraugen -->
-  <circle cx="80" cy="105" r="8" fill="#1E1E3F"/>
-  <circle cx="120" cy="105" r="8" fill="#1E1E3F"/>
-  
-  <!-- Robotermund -->
-  <rect x="85" y="125" width="30" height="5" rx="2" fill="#1E1E3F"/>
-  
-  <!-- Roboter-Antennen -->
-  <line x1="90" y1="85" x2="80" y2="65" stroke="#14F195" stroke-width="3"/>
-  <line x1="110" y1="85" x2="120" y2="65" stroke="#14F195" stroke-width="3"/>
-  <circle cx="80" cy="65" r="4" fill="#FAD02C"/>
-  <circle cx="120" cy="65" r="4" fill="#FAD02C"/>
-  
-  <!-- Datenlinien (Trading-Chart) -->
-  <polyline points="50,150 70,140 90,155 120,125 150,145" stroke="#FAD02C" stroke-width="4" fill="none"/>
-  
-  <!-- Subtle glow effect -->
+  <!-- Background with gradient -->
   <defs>
+    <radialGradient id="backgroundGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" style="stop-color:#1a1a1a;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#121212;stop-opacity:1" />
+    </radialGradient>
+    <linearGradient id="primaryGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#14F195;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0CB574;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="secondaryGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#9945FF;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#7E37D8;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#FAD02C;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#F39C12;stop-opacity:1" />
+    </linearGradient>
     <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-      <feGaussianBlur stdDeviation="5" result="blur"/>
-      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+      <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+      <feMerge> 
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="innerGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+      <feMerge> 
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
     </filter>
   </defs>
-  <g filter="url(#glow)">
-    <circle cx="100" cy="100" r="90" fill="#9945FF" fill-opacity="0.1"/>
+  
+  <!-- Background circle -->
+  <circle cx="100" cy="100" r="95" fill="url(#backgroundGrad)" stroke="url(#primaryGrad)" stroke-width="3"/>
+  
+  <!-- Outer ring with animated effect -->
+  <circle cx="100" cy="100" r="85" stroke="url(#primaryGrad)" stroke-width="2" fill="none" opacity="0.6"/>
+  <circle cx="100" cy="100" r="75" stroke="url(#secondaryGrad)" stroke-width="1" fill="none" opacity="0.4"/>
+  
+  <!-- Main bot body - hexagonal modern design -->
+  <path d="M100 45 L130 60 L130 90 L100 105 L70 90 L70 60 Z" fill="url(#secondaryGrad)" opacity="0.9" filter="url(#innerGlow)"/>
+  
+  <!-- Bot head/helmet -->
+  <rect x="75" y="65" width="50" height="35" rx="12" fill="url(#primaryGrad)" filter="url(#glow)"/>
+  
+  <!-- Modern LED eyes -->
+  <rect x="85" y="75" width="8" height="12" rx="4" fill="#000000"/>
+  <rect x="107" y="75" width="8" height="12" rx="4" fill="#000000"/>
+  <rect x="86" y="77" width="6" height="8" rx="3" fill="url(#accentGrad)" filter="url(#innerGlow)"/>
+  <rect x="108" y="77" width="6" height="8" rx="3" fill="url(#accentGrad)" filter="url(#innerGlow)"/>
+  
+  <!-- Visor line -->
+  <line x1="80" y1="82" x2="120" y2="82" stroke="#000000" stroke-width="2" opacity="0.3"/>
+  
+  <!-- Neural network connections -->
+  <g stroke="url(#primaryGrad)" stroke-width="1.5" fill="none" opacity="0.7">
+    <path d="M60 110 Q80 120 100 110 Q120 100 140 110"/>
+    <path d="M65 125 Q85 135 100 125 Q115 115 135 125"/>
+    <path d="M70 140 Q90 150 100 140 Q110 130 130 140"/>
   </g>
+  
+  <!-- Data nodes -->
+  <circle cx="60" cy="110" r="3" fill="url(#accentGrad)" filter="url(#innerGlow)"/>
+  <circle cx="100" cy="110" r="3" fill="url(#accentGrad)" filter="url(#innerGlow)"/>
+  <circle cx="140" cy="110" r="3" fill="url(#accentGrad)" filter="url(#innerGlow)"/>
+  <circle cx="65" cy="125" r="2" fill="url(#primaryGrad)"/>
+  <circle cx="100" cy="125" r="2" fill="url(#primaryGrad)"/>
+  <circle cx="135" cy="125" r="2" fill="url(#primaryGrad)"/>
+  <circle cx="70" cy="140" r="2" fill="url(#secondaryGrad)"/>
+  <circle cx="100" cy="140" r="2" fill="url(#secondaryGrad)"/>
+  <circle cx="130" cy="140" r="2" fill="url(#secondaryGrad)"/>
+  
+  <!-- Trading chart indicator -->
+  <g stroke="url(#accentGrad)" stroke-width="3" fill="none" filter="url(#glow)">
+    <polyline points="50,160 65,150 80,165 95,140 110,155 125,135 140,150"/>
+  </g>
+  
+  <!-- Chart points -->
+  <circle cx="50" cy="160" r="2" fill="url(#accentGrad)"/>
+  <circle cx="95" cy="140" r="2" fill="url(#accentGrad)"/>
+  <circle cx="125" cy="135" r="2" fill="url(#accentGrad)"/>
+  <circle cx="140" cy="150" r="2" fill="url(#accentGrad)"/>
+  
+  <!-- Corner accents -->
+  <path d="M30 30 L40 30 L30 40" stroke="url(#primaryGrad)" stroke-width="2" fill="none"/>
+  <path d="M170 30 L160 30 L170 40" stroke="url(#primaryGrad)" stroke-width="2" fill="none"/>
+  <path d="M30 170 L40 170 L30 160" stroke="url(#primaryGrad)" stroke-width="2" fill="none"/>
+  <path d="M170 170 L160 170 L170 160" stroke="url(#primaryGrad)" stroke-width="2" fill="none"/>
 </svg> 

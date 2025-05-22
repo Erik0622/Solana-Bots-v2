@@ -12,17 +12,17 @@ const Header: FC = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   
-  // Aktualisiere den Hash nur clientseitig
+  // Update hash client-side only
   useEffect(() => {
-    // Setze den initialen Hash
+    // Set initial hash
     setCurrentHash(window.location.hash.substring(1));
     
-    // Höre auf Hash-Änderungen
+    // Listen to hash changes
     const handleHashChange = () => {
       setCurrentHash(window.location.hash.substring(1));
     };
     
-    // Scroll-Effekt für Header-Transparenz
+    // Scroll effect for header transparency
     const handleScroll = () => {
       setIsScrolled(window.scrollY > 50);
     };
@@ -74,8 +74,7 @@ const Header: FC = () => {
             </span>
           </Link>
           
-          {/* Desktop Navigation */}
-          <nav className="hidden lg:flex items-center space-x-1">
+                    {/* Desktop Navigation */}          <nav className="hidden md:flex items-center space-x-1">
             {navItems.map((item) => {
               const active = item.type === 'page' 
                 ? isActive(item.href) 
@@ -107,12 +106,7 @@ const Header: FC = () => {
               <WalletMultiButton className="!bg-gradient-to-r !from-primary !to-secondary !text-black !font-semibold !rounded-lg !transition-all !duration-200 hover:!scale-105 hover:!shadow-lg hover:!shadow-primary/25" />
             </div>
             
-            {/* Mobile Menu Button */}
-            <button
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="lg:hidden p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
-              aria-label="Toggle mobile menu"
-            >
+                        {/* Mobile Menu Button */}            <button              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}              className="md:hidden p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"              aria-label="Toggle mobile menu"            >
               <div className="w-5 h-5 flex flex-col justify-center items-center">
                 <span className={`block w-full h-0.5 bg-white transition-all duration-200 ${
                   isMobileMenuOpen ? 'rotate-45 translate-y-0.5' : '-translate-y-1'
@@ -128,10 +122,7 @@ const Header: FC = () => {
           </div>
         </div>
         
-        {/* Mobile Menu */}
-        <div className={`lg:hidden transition-all duration-300 overflow-hidden ${
-          isMobileMenuOpen ? 'max-h-96 opacity-100 pb-6' : 'max-h-0 opacity-0'
-        }`}>
+                {/* Mobile Menu */}        <div className={`md:hidden transition-all duration-300 overflow-hidden ${          isMobileMenuOpen ? 'max-h-96 opacity-100 pb-6' : 'max-h-0 opacity-0'        }`}>
           <nav className="flex flex-col space-y-1 pt-4 border-t border-white/10">
             {navItems.map((item) => {
               const active = item.type === 'page' 
