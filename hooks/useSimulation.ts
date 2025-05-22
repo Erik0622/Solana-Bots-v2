@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { getSimulationSummary } from '@/lib/simulation/botSimulator';
+import { simulateNewTokenTrading } from '@/lib/simulation/newTokenSimulator';
 
 export interface SimulationSummary {
   profitPercentage: number;
@@ -21,7 +21,7 @@ export const useSimulation = (botId: string, useRealData: boolean = true) => {
   });
   
   const [error, setError] = useState<string | null>(null);
-  const [dataSource, setDataSource] = useState<'real' | 'simulated'>(useRealData ? 'real' : 'simulated');
+  const [dataSource, setDataSource] = useState<'new-token'>('new-token');
   
   useEffect(() => {
     let isMounted = true;
@@ -31,27 +31,24 @@ export const useSimulation = (botId: string, useRealData: boolean = true) => {
         setError(null);
         setSimulation(prev => ({ ...prev, isLoading: true }));
         
-        // Load simulation results
-        console.log(`Loading ${dataSource === 'real' ? 'real' : 'simulated'} data for bot ${botId}`);
-        const result = await getSimulationSummary(botId, dataSource === 'real');
+        // NEUE TOKEN SIMULATION - Realistische neue Token nach Raydium Migration
+        console.log(`Loading NEW TOKEN simulation data for bot ${botId}`);
+        const result = simulateNewTokenTrading(botId, 10); // 10% default risk
         
         if (isMounted) {
           setSimulation({
-            ...result,
+            profitPercentage: result.profitPercentage,
+            tradeCount: result.tradeCount,
+            successRate: result.successRate,
+            dailyData: result.dailyData,
             isLoading: false
           });
         }
       } catch (err) {
-        console.error('Error loading simulation:', err);
+        console.error('Error loading new token simulation:', err);
         if (isMounted) {
-          setError('Could not load simulation data.');
+          setError('Could not load new token simulation data.');
           setSimulation(prev => ({ ...prev, isLoading: false }));
-          
-          // Fallback to simulated data on error with real data
-          if (dataSource === 'real') {
-            console.warn('Fallback to simulated data after error with real data');
-            setDataSource('simulated');
-          }
         }
       }
     };
@@ -61,38 +58,29 @@ export const useSimulation = (botId: string, useRealData: boolean = true) => {
     return () => {
       isMounted = false;
     };
-  }, [botId, dataSource]);
+  }, [botId]);
   
   return {
     simulation,
     error,
     dataSource,
-    // Allow switching between real and simulated data
-    toggleDataSource: () => {
-      setDataSource(prev => prev === 'real' ? 'simulated' : 'real');
-    },
-    setDataSource: (source: 'real' | 'simulated') => {
-      setDataSource(source);
-    },
+    // Refresh simulation with new random seed
     refreshSimulation: async () => {
       setSimulation(prev => ({ ...prev, isLoading: true }));
       try {
-        const result = await getSimulationSummary(botId, dataSource === 'real');
+        const result = simulateNewTokenTrading(botId, 10);
         setSimulation({
-          ...result,
+          profitPercentage: result.profitPercentage,
+          tradeCount: result.tradeCount,
+          successRate: result.successRate,
+          dailyData: result.dailyData,
           isLoading: false
         });
         setError(null);
       } catch (err) {
-        console.error('Error updating simulation:', err);
-        setError('Could not update simulation data.');
+        console.error('Error updating new token simulation:', err);
+        setError('Could not update new token simulation data.');
         setSimulation(prev => ({ ...prev, isLoading: false }));
-        
-        // Fallback to simulated data on error with real data
-        if (dataSource === 'real') {
-          console.warn('Fallback to simulated data after refresh error');
-          setDataSource('simulated');
-        }
       }
     }
   };

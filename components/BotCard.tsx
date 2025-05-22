@@ -64,13 +64,12 @@ const BotCard: FC<BotCardProps> = ({
   const [isHovered, setIsHovered] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
   
-  // Load simulation data for this bot with real data if available
+  // Load simulation data for this bot using new token simulation
   const { 
     simulation, 
     error: simulationError, 
-    dataSource,
-    toggleDataSource
-  } = useSimulation(id, true); // true = prefer real data
+    dataSource
+  } = useSimulation(id, true);
 
   // Animation on mount
   useEffect(() => {
@@ -469,16 +468,7 @@ const BotCard: FC<BotCardProps> = ({
           </div>
         </div>
         
-        {/* Data source indicator */}
-        <div className="flex justify-center mt-2">
-          <div className={`px-2 py-1 rounded text-xs ${
-            dataSource === 'real' 
-              ? 'bg-green-500/20 text-green-400 border border-green-500/30' 
-              : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-          }`}>
-            {dataSource === 'real' ? '📊 Real Data' : '🔬 Simulated Data'}
-          </div>
-        </div>
+                {/* Data source indicator */}        <div className="flex justify-center mt-2">          <div className="px-2 py-1 rounded text-xs bg-purple-500/20 text-purple-400 border border-purple-500/30">            🚀 New Token Data (Post-Raydium)          </div>        </div>
       </div>
 
       {/* Strategy Section */}
