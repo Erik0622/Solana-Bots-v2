@@ -50,7 +50,7 @@ const strategies: Record<string, BotStrategy> = {
       const volumeCondition = currentVolume > averageVolume * 1.5;
       const priceCondition = currentClose >= prevClose;
       
-      // console.log(`VolumeTracker[${index}] | AvgVol: ${averageVolume.toFixed(2)}, CurrVol: ${currentVolume.toFixed(2)} -> VolCond: ${volumeCondition} | PrevClose: ${prevClose.toFixed(2)}, CurrClose: ${currentClose.toFixed(2)} -> PriceCond: ${priceCondition} | Result: ${volumeCondition && priceCondition}`);
+      console.log(`VolumeTracker[${index}] | AvgVol: ${averageVolume.toFixed(2)}, CurrVol: ${currentVolume.toFixed(2)} -> VolCond: ${volumeCondition} | PrevClose: ${prevClose.toFixed(2)}, CurrClose: ${currentClose.toFixed(2)} -> PriceCond: ${priceCondition} | Result: ${volumeCondition && priceCondition}`);
       
       return volumeCondition && priceCondition;
     },
@@ -101,7 +101,7 @@ const strategies: Record<string, BotStrategy> = {
       // Sicherstellen, dass prev4 existiert (obwohl index < 6 das abdecken sollte)
       const priceIncrease = prev4 ? (current.close - prev4.close) / prev4.close > 0.1 : false;
         
-      // console.log(`TrendSurfer[${index}] | RisingCandles: ${risingCandles} (Curr: ${current.open.toFixed(2)}-${current.close.toFixed(2)}, Prev1: ${prev1.open.toFixed(2)}-${prev1.close.toFixed(2)}) | RisingVol: ${risingVolume} (Curr: ${current.volume.toFixed(2)}, Prev1: ${prev1.volume.toFixed(2)}) | PriceInc: ${priceIncrease} (Curr: ${current.close.toFixed(2)}, Prev4: ${prev4 ? prev4.close.toFixed(2) : 'N/A'}) | Result: ${risingCandles && (risingVolume || priceIncrease)}`);
+      console.log(`TrendSurfer[${index}] | RisingCandles: ${risingCandles} (Curr: ${current.open.toFixed(2)}-${current.close.toFixed(2)}, Prev1: ${prev1.open.toFixed(2)}-${prev1.close.toFixed(2)}) | RisingVol: ${risingVolume} (Curr: ${current.volume.toFixed(2)}, Prev1: ${prev1.volume.toFixed(2)}) | PriceInc: ${priceIncrease} (Curr: ${current.close.toFixed(2)}, Prev4: ${prev4 ? prev4.close.toFixed(2) : 'N/A'}) | Result: ${risingCandles && (risingVolume || priceIncrease)}`);
 
       return risingCandles && (risingVolume || priceIncrease);
     },
@@ -144,7 +144,12 @@ const strategies: Record<string, BotStrategy> = {
       const averageVolume = data.slice(index - 5, index).reduce((sum, d) => sum + d.volume, 0) / 5;
       const stableVolume = data[index].volume >= averageVolume * 0.7;
       
-      return dropPercentage >= 0.3 && dropPercentage <= 0.6 && stableVolume;
+      const dropCondition = dropPercentage >= 0.3 && dropPercentage <= 0.6;
+      const volumeCondition = stableVolume;
+      
+      console.log(`DipHunter[${index}] | LocalHigh: ${localHighPrice.toFixed(2)}, CurrPrice: ${currentPrice.toFixed(2)}, Drop: ${(dropPercentage * 100).toFixed(1)}% -> DropCond: ${dropCondition} | AvgVol: ${averageVolume.toFixed(2)}, CurrVol: ${data[index].volume.toFixed(2)} -> VolCond: ${volumeCondition} | Result: ${dropCondition && volumeCondition}`);
+      
+      return dropCondition && volumeCondition;
     },
     shouldSell: (data, index, entryPrice) => {
       if (index === 0) return false;
@@ -255,6 +260,8 @@ export async function simulateBot(
       entryPrice = currentData.close;
       usdBalance -= investmentAmount;
       
+      console.log(`📈 BUY TRADE [${normalizedBotId}] at index ${i}: Price: ${currentData.close.toFixed(4)}, Amount: $${tradeAmount.toFixed(2)}, Tokens: ${tokenBalance.toFixed(6)}`);
+      
       trades.push({
         timestamp: currentData.timestamp,
         type: 'buy',
@@ -270,6 +277,9 @@ export async function simulateBot(
       const fee = sellValue * 0.01; // 1% Gebühr
       const tradeAmount = sellValue - fee;
       usdBalance += tradeAmount;
+      
+      const profit = (currentData.close - entryPrice) / entryPrice * 100;
+      console.log(`📉 SELL TRADE [${normalizedBotId}] at index ${i}: Price: ${currentData.close.toFixed(4)}, Amount: $${tradeAmount.toFixed(2)}, Profit: ${profit.toFixed(2)}%`);
       
       trades.push({
         timestamp: currentData.timestamp,

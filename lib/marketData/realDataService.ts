@@ -65,7 +65,7 @@ export async function fetchHistoricalData(
       return cachedData.data;
     }
 
-    // CoinGecko API aufrufen
+    // CoinGecko API aufrufen - ohne User-Agent Header für Browser-Kompatibilität
     const response = await axios.get(`${COINGECKO_API}/coins/${tokenInfo.coinGeckoId}/market_chart`, {
       params: {
         vs_currency: 'usd',
@@ -73,8 +73,8 @@ export async function fetchHistoricalData(
         interval: 'hourly'
       },
       headers: {
-        'Accept': 'application/json',
-        'User-Agent': 'SolanaTradingBot/1.0.0'
+        'Accept': 'application/json'
+        // User-Agent Header entfernt - verursacht Probleme im Browser
       }
     });
 
