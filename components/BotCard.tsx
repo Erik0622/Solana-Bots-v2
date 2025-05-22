@@ -382,39 +382,7 @@ const BotCard: FC<BotCardProps> = ({
         </p>
       </div>
 
-      {/* Performance Stats */}
-      <div className="grid grid-cols-2 gap-2 sm:gap-3 mb-4 sm:mb-6">
-        <div className="stat-card group-hover:scale-105 transition-all duration-300 p-2 sm:p-4">
-          <p className="text-xs text-white/50 font-medium">Weekly Return</p>
-          <p className="text-sm sm:text-xl font-bold text-white">
-            {simulation && !simulation.isLoading 
-              ? ((simulation.profitPercentage / 100) * riskPercentage).toFixed(2) + '%'
-              : weeklyReturn}
-          </p>
-        </div>
-        <div className="stat-card group-hover:scale-105 transition-all duration-300 p-2 sm:p-4">
-          <p className="text-xs text-white/50 font-medium">Monthly Return</p>
-          <p className="text-sm sm:text-xl font-bold text-white">
-            {simulation && !simulation.isLoading 
-              ? ((simulation.profitPercentage / 100) * riskPercentage * 4.3).toFixed(2) + '%'
-              : monthlyReturn}
-          </p>
-        </div>
-        <div className="stat-card group-hover:scale-105 transition-all duration-300 p-2 sm:p-4">
-          <p className="text-xs text-white/50 font-medium">Trades (30d)</p>
-          <p className="text-sm sm:text-xl font-bold text-white">
-            {simulation && !simulation.isLoading 
-              ? Math.round(simulation.tradeCount * 4.3)
-              : trades}
-          </p>
-        </div>
-        <div className="stat-card group-hover:scale-105 transition-all duration-300 p-2 sm:p-4">
-          <p className="text-xs text-white/50 font-medium">Win Rate</p>
-          <p className="text-sm sm:text-xl font-bold text-white">
-            {actualWinRate.toFixed(0)}%
-          </p>
-        </div>
-      </div>
+            {/* Performance Stats */}      <div className="grid grid-cols-2 gap-2 sm:gap-3 mb-4 sm:mb-6">        <div className="bg-white/5 backdrop-blur-sm border border-white/10 hover:border-white/20 rounded-xl transition-all duration-300 hover:scale-105 hover:bg-white/10 p-2 sm:p-4">          <p className="text-xs text-white/50 font-medium">Weekly Return</p>          <p className="text-sm sm:text-xl font-bold text-white">            {simulation && !simulation.isLoading               ? ((simulation.profitPercentage / 100) * riskPercentage).toFixed(2) + '%'              : weeklyReturn}          </p>        </div>        <div className="bg-white/5 backdrop-blur-sm border border-white/10 hover:border-white/20 rounded-xl transition-all duration-300 hover:scale-105 hover:bg-white/10 p-2 sm:p-4">          <p className="text-xs text-white/50 font-medium">Monthly Return</p>          <p className="text-sm sm:text-xl font-bold text-white">            {simulation && !simulation.isLoading               ? ((simulation.profitPercentage / 100) * riskPercentage * 4.3).toFixed(2) + '%'              : monthlyReturn}          </p>        </div>        <div className="bg-white/5 backdrop-blur-sm border border-white/10 hover:border-white/20 rounded-xl transition-all duration-300 hover:scale-105 hover:bg-white/10 p-2 sm:p-4">          <p className="text-xs text-white/50 font-medium">Trades (30d)</p>          <p className="text-sm sm:text-xl font-bold text-white">            {simulation && !simulation.isLoading               ? Math.round(simulation.tradeCount * 4.3)              : trades}          </p>        </div>        <div className="bg-white/5 backdrop-blur-sm border border-white/10 hover:border-white/20 rounded-xl transition-all duration-300 hover:scale-105 hover:bg-white/10 p-2 sm:p-4">          <p className="text-xs text-white/50 font-medium">Win Rate</p>          <p className="text-sm sm:text-xl font-bold text-white">            {actualWinRate.toFixed(0)}%          </p>        </div>      </div>
 
       {/* Performance Chart with Simulation Data */}
       <div className="chart-container mb-4 sm:mb-6 group-hover:border-primary/50 transition-all duration-300">
