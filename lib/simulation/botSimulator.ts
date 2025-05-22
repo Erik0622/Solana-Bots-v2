@@ -41,14 +41,18 @@ const strategies: Record<string, BotStrategy> = {
     shouldBuy: (data, index) => {
       if (index < 5) return false;
 
-      // Volume-Spike-Erkennung
-      const averageVolume = data.slice(index - 5, index).reduce((sum, d) => sum + d.volume, 0) / 5;
-      const currentVolume = data[index].volume;
+      const relevantData = data.slice(index - 5, index + 1); // +1 to include current
+      const averageVolume = relevantData.slice(0, 5).reduce((sum, d) => sum + d.volume, 0) / 5;
+      const currentVolume = relevantData[5].volume;
+      const currentClose = relevantData[5].close;
+      const prevClose = relevantData[4].close;
+
+      const volumeCondition = currentVolume > averageVolume * 1.5;
+      const priceCondition = currentClose >= prevClose;
       
-      // Kaufen bei starkem Volumenanstieg und steigendem Preis
-      // Weniger strenge Kriterien, damit die Simulation auch Trades ausführt
-      return currentVolume > averageVolume * 1.5 && 
-             data[index].close >= data[index - 1].close;
+      // console.log(`VolumeTracker[${index}] | AvgVol: ${averageVolume.toFixed(2)}, CurrVol: ${currentVolume.toFixed(2)} -> VolCond: ${volumeCondition} | PrevClose: ${prevClose.toFixed(2)}, CurrClose: ${currentClose.toFixed(2)} -> PriceCond: ${priceCondition} | Result: ${volumeCondition && priceCondition}`);
+      
+      return volumeCondition && priceCondition;
     },
     shouldSell: (data, index, entryPrice) => {
       if (index === 0) return false;
@@ -77,21 +81,28 @@ const strategies: Record<string, BotStrategy> = {
   },
   'trend-surfer': {
     shouldBuy: (data, index) => {
-      if (index < 6) return false;
+      if (index < 6) return false; // Benötigt Daten bis index-4, also mind. 5 vorherige + aktueller
       
-      // Zwei grüne Kerzen in Folge (weniger streng als drei)
+      const current = data[index];
+      const prev1 = data[index-1];
+      const prev2 = data[index-2];
+      const prev4 = data[index-4]; // Für Preisanstieg
+
+      // Zwei grüne Kerzen in Folge
       const risingCandles = 
-        data[index].close > data[index].open &&
-        data[index - 1].close > data[index - 1].open;
+        current.close > current.open &&
+        prev1.close > prev1.open;
         
       // Ansteigendes Volumen - weniger strenge Bedingung
       const risingVolume = 
-        data[index].volume > data[index - 1].volume * 0.9;
+        current.volume > prev1.volume * 0.9;
         
-      // 10% Preisanstieg in der letzten Stunde (weniger als 15%)
-      const priceIncrease = 
-        (data[index].close - data[index - 4].close) / data[index - 4].close > 0.1;
+      // 10% Preisanstieg in der letzten Stunde (4 Intervalle bei 15min)
+      // Sicherstellen, dass prev4 existiert (obwohl index < 6 das abdecken sollte)
+      const priceIncrease = prev4 ? (current.close - prev4.close) / prev4.close > 0.1 : false;
         
+      // console.log(`TrendSurfer[${index}] | RisingCandles: ${risingCandles} (Curr: ${current.open.toFixed(2)}-${current.close.toFixed(2)}, Prev1: ${prev1.open.toFixed(2)}-${prev1.close.toFixed(2)}) | RisingVol: ${risingVolume} (Curr: ${current.volume.toFixed(2)}, Prev1: ${prev1.volume.toFixed(2)}) | PriceInc: ${priceIncrease} (Curr: ${current.close.toFixed(2)}, Prev4: ${prev4 ? prev4.close.toFixed(2) : 'N/A'}) | Result: ${risingCandles && (risingVolume || priceIncrease)}`);
+
       return risingCandles && (risingVolume || priceIncrease);
     },
     shouldSell: (data, index, entryPrice) => {
