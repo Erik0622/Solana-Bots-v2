@@ -63,13 +63,16 @@ const BotCard: FC<BotCardProps> = ({
   const [isFavorite, setIsFavorite] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
+  const [enableRealAPI, setEnableRealAPI] = useState(true);
   
-  // Load simulation data for this bot using new token simulation
+  // Load simulation data for this bot
   const { 
     simulation, 
     error: simulationError, 
-    dataSource
-  } = useSimulation(id, true);
+    dataSource,
+    toggleDataSource,
+    refreshSimulation
+  } = useSimulation(id, false, enableRealAPI);
 
   // Animation on mount
   useEffect(() => {
@@ -246,6 +249,19 @@ const BotCard: FC<BotCardProps> = ({
   };
 
   const actualWinRate = calculateWinRate();
+
+  // Funktion zum Umschalten zwischen echten und künstlichen Daten
+  const handleDataSourceToggle = async () => {
+    setIsLoading(true);
+    try {
+      const newState = await toggleDataSource();
+      setEnableRealAPI(newState);
+    } catch (error) {
+      console.error('Error toggling data source:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const activateBot = async () => {
     if (!connected || !publicKey || !signTransaction) {
@@ -468,7 +484,67 @@ const BotCard: FC<BotCardProps> = ({
           </div>
         </div>
         
-                {/* Data source indicator */}        <div className="flex justify-center mt-2">          <div className="px-2 py-1 rounded text-xs bg-purple-500/20 text-purple-400 border border-purple-500/30">            🚀 New Token Data (Post-Raydium)          </div>        </div>
+        {/* Data source indicator and controls */}
+        <div className="flex flex-col gap-2 mt-2">
+          <div className="flex justify-between items-center">
+            <div className={`px-2 py-1 rounded text-xs border ${
+              dataSource === 'real-api' 
+                ? 'bg-green-500/20 text-green-400 border-green-500/30' 
+                : 'bg-purple-500/20 text-purple-400 border-purple-500/30'
+            }`}>
+              {dataSource === 'real-api' ? '🔴 Live API Data' : '🚀 Simulated Data'}
+            </div>
+            
+            <button
+              onClick={handleDataSourceToggle}
+              disabled={isLoading || simulation.isLoading}
+              className="px-2 py-1 text-xs bg-white/10 hover:bg-white/20 rounded border border-white/20 hover:border-primary/50 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isLoading ? '...' : (dataSource === 'real-api' ? 'Switch to Demo' : 'Use Real Data')}
+            </button>
+          </div>
+          
+          {/* Token information for real API data */}
+          {dataSource === 'real-api' && simulation.realTokens && simulation.realTokens.length > 0 && (
+            <div className="bg-white/5 rounded-lg p-2 border border-white/10">
+              <div className="text-xs text-white/50 mb-1">Trading on {simulation.realTokens.length} tokens:</div>
+              <div className="flex flex-wrap gap-1">
+                {simulation.realTokens.slice(0, 3).map((token, index) => (
+                  <span key={index} className="text-xs bg-primary/20 text-primary px-1 py-0.5 rounded">
+                    {token.symbol}
+                  </span>
+                ))}
+                {simulation.realTokens.length > 3 && (
+                  <span className="text-xs text-white/40">+{simulation.realTokens.length - 3} more</span>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-2 mt-2 text-xs">
+                <div>
+                  <span className="text-white/40">Avg 24h Vol:</span>
+                  <span className="text-white ml-1">${Math.round(simulation.realTokens.reduce((sum, t) => sum + t.volume24h, 0) / simulation.realTokens.length / 1000)}k</span>
+                </div>
+                <div>
+                  <span className="text-white/40">Market Cap:</span>
+                  <span className="text-white ml-1">${Math.round(simulation.realTokens.reduce((sum, t) => sum + t.marketCap, 0) / simulation.realTokens.length / 1000000)}M</span>
+                </div>
+              </div>
+              <div className="mt-2 text-xs text-green-400 bg-green-500/10 rounded px-2 py-1">
+                📊 Using real 7-day price history from Birdeye API
+              </div>
+            </div>
+          )}
+          
+          {/* Refresh button */}
+          <div className="flex justify-center">
+            <button
+              onClick={refreshSimulation}
+              disabled={simulation.isLoading}
+              className="text-xs text-white/50 hover:text-white transition-all duration-300 disabled:opacity-50"
+            >
+              🔄 Refresh Data
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Strategy Section */}
