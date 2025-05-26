@@ -15,8 +15,8 @@ export interface SimulationSummary {
 
 export const useSimulation = (
   botId: string, 
-  useRealData: boolean = false, // Deprecated parameter
-  enableRealAPI: boolean = true, // STANDARD: Echte Marktdaten!
+  autoRefresh: boolean = false,
+  useRealAPI: boolean = true, // STANDARD: Echte Marktdaten!
   useBitquery: boolean = true // NEU: Bitquery für beste Memecoin-Daten
 ) => {
   const [simulation, setSimulation] = useState<SimulationSummary>({
@@ -30,150 +30,50 @@ export const useSimulation = (
   const [error, setError] = useState<string | null>(null);
   const [dataSource, setDataSource] = useState<'new-token' | 'real-api' | 'bitquery-api'>('new-token');
   
-  useEffect(() => {
-    let isMounted = true;
+  const generateMockData = (botId: string): SimulationSummary => {
+    // Generate realistic mock data based on bot type
+    const days = 7;
+    const dailyData = [];
+    let currentValue = 100;
     
-    const loadSimulation = async () => {
-      try {
-        setError(null);
-        setSimulation(prev => ({ ...prev, isLoading: true }));
-        
-        if (enableRealAPI) {
-          // ECHTE API-DATEN - Über Backend API-Route
-          console.log(`Loading ${useBitquery ? 'BITQUERY' : 'LEGACY'} API simulation data for bot ${botId}`);
-          setDataSource(useBitquery ? 'bitquery-api' : 'real-api');
-          
-          const response = await fetch('/api/simulation', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              botType: botId,
-              tokenCount: 10,
-              useBitquery
-            })
-          });
-          
-          if (!response.ok) {
-            throw new Error(`API Error: ${response.status}`);
-          }
-          
-          const result = await response.json();
-          
-          if (isMounted) {
-            setSimulation({
-              profitPercentage: result.profitPercentage,
-              tradeCount: result.tradeCount,
-              successRate: result.successRate,
-              dailyData: result.dailyData,
-              realTokens: result.tokens,
-              isLoading: false
-            });
-          }
-        } else {
-          // FALLBACK: Simulierte neue Token-Daten
-          console.log(`Loading simulated new token data for bot ${botId}`);
-          setDataSource('new-token');
-          
-          const result = simulateNewTokenTrading(botId, 10);
-          if (isMounted) {
-            setSimulation({
-              profitPercentage: result.profitPercentage,
-              tradeCount: result.tradeCount,
-              successRate: result.successRate,
-              dailyData: result.dailyData,
-              isLoading: false
-            });
-          }
-        }
-      } catch (err) {
-        console.error('Error loading simulation:', err);
-        if (isMounted) {
-          setError(err instanceof Error ? err.message : 'Could not load simulation data.');
-          // Bei Fehler: Fallback zu lokaler Simulation
-          const fallbackResult = simulateNewTokenTrading(botId, 10);
-          setSimulation({
-            profitPercentage: fallbackResult.profitPercentage,
-            tradeCount: fallbackResult.tradeCount,
-            successRate: fallbackResult.successRate,
-            dailyData: fallbackResult.dailyData,
-            isLoading: false
-          });
-          setDataSource('new-token');
-        }
-      }
-    };
-    
-    loadSimulation();
-    
-    return () => {
-      isMounted = false;
-    };
-  }, [botId, enableRealAPI, useBitquery]); // useBitquery als Dependency hinzugefügt
-  
-  return {
-    simulation,
-    error,
-    dataSource,
-    // Refresh simulation with new random seed
-    refreshSimulation: async () => {
-      setSimulation(prev => ({ ...prev, isLoading: true }));
-      try {
-        if (enableRealAPI) {
-          console.log(`Refreshing ${useBitquery ? 'BITQUERY' : 'LEGACY'} simulation for bot ${botId}`);
-          
-          const response = await fetch('/api/simulation', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              botType: botId,
-              tokenCount: 10,
-              useBitquery
-            })
-          });
-          
-          if (!response.ok) {
-            throw new Error(`API Error: ${response.status}`);
-          }
-          
-          const result = await response.json();
-          
-          setSimulation({
-            profitPercentage: result.profitPercentage,
-            tradeCount: result.tradeCount,
-            successRate: result.successRate,
-            dailyData: result.dailyData,
-            realTokens: result.tokens,
-            isLoading: false
-          });
-        } else {
-          const result = simulateNewTokenTrading(botId, 10);
-          setSimulation({
-            profitPercentage: result.profitPercentage,
-            tradeCount: result.tradeCount,
-            successRate: result.successRate,
-            dailyData: result.dailyData,
-            isLoading: false
-          });
-        }
-        setError(null);
-      } catch (err) {
-        console.error('Error updating simulation:', err);
-        setError('Could not update simulation data.');
-        setSimulation(prev => ({ ...prev, isLoading: false }));
-      }
-    },
-    
-    // Neue Funktion: Umschalten zwischen APIs
-    toggleDataSource: async (newUseBitquery: boolean) => {
-      setSimulation(prev => ({ ...prev, isLoading: true }));
-      setError(null);
+    for (let i = 0; i < days; i++) {
+      // Simulate daily price changes
+      const change = (Math.random() - 0.4) * 5; // Slight positive bias
+      currentValue += change;
+      currentValue = Math.max(90, Math.min(130, currentValue)); // Keep within reasonable bounds
       
-      try {
-        console.log(`Switching to ${newUseBitquery ? 'BITQUERY' : 'LEGACY'} API for bot ${botId}`);
+      const date = new Date();
+      date.setDate(date.getDate() - (days - 1 - i));
+      
+      dailyData.push({
+        date: date.toISOString().split('T')[0],
+        value: currentValue
+      });
+    }
+
+    // Calculate metrics
+    const profitPercentage = currentValue - 100;
+    const tradeCount = Math.floor(Math.random() * 50) + 10;
+    const successRate = Math.random() * 30 + 60; // 60-90%
+
+    return {
+      profitPercentage,
+      tradeCount,
+      successRate,
+      dailyData,
+      isLoading: false
+    };
+  };
+
+  const loadSimulation = async () => {
+    try {
+      setError(null);
+      setSimulation(prev => ({ ...prev, isLoading: true }));
+      
+      if (useRealAPI) {
+        // ECHTE API-DATEN - Über Backend API-Route
+        console.log(`Loading ${useBitquery ? 'BITQUERY' : 'LEGACY'} API simulation data for bot ${botId}`);
+        setDataSource(useBitquery ? 'bitquery-api' : 'real-api');
         
         const response = await fetch('/api/simulation', {
           method: 'POST',
@@ -183,7 +83,7 @@ export const useSimulation = (
           body: JSON.stringify({
             botType: botId,
             tokenCount: 10,
-            useBitquery: newUseBitquery
+            useBitquery
           })
         });
         
@@ -201,14 +101,130 @@ export const useSimulation = (
           realTokens: result.tokens,
           isLoading: false
         });
+      } else {
+        // FALLBACK: Simulierte neue Token-Daten
+        console.log(`Loading simulated new token data for bot ${botId}`);
+        setDataSource('new-token');
         
-        setDataSource(newUseBitquery ? 'bitquery-api' : 'real-api');
-        
-      } catch (err) {
-        console.error('Error switching data source:', err);
-        setError('Could not switch data source.');
-        setSimulation(prev => ({ ...prev, isLoading: false }));
+        const result = simulateNewTokenTrading(botId, 10);
+        setSimulation({
+          profitPercentage: result.profitPercentage,
+          tradeCount: result.tradeCount,
+          successRate: result.successRate,
+          dailyData: result.dailyData,
+          isLoading: false
+        });
+      }
+    } catch (err) {
+      console.error('Error loading simulation:', err);
+      if (useRealAPI) {
+        setError(err instanceof Error ? err.message : 'Could not load simulation data.');
+        // Bei Fehler: Fallback zu lokaler Simulation
+        const fallbackResult = simulateNewTokenTrading(botId, 10);
+        setSimulation({
+          profitPercentage: fallbackResult.profitPercentage,
+          tradeCount: fallbackResult.tradeCount,
+          successRate: fallbackResult.successRate,
+          dailyData: fallbackResult.dailyData,
+          isLoading: false
+        });
+        setDataSource('new-token');
       }
     }
+  };
+
+  const refreshSimulation = async () => {
+    setError(null);
+    
+    try {
+      if (dataSource === 'real-api') {
+        // Try to fetch real data
+        const response = await fetch(`/api/simulation/${botId}`);
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch real data');
+        }
+        
+        const data = await response.json();
+        setSimulation({
+          profitPercentage: data.profitPercentage,
+          tradeCount: data.tradeCount,
+          successRate: data.successRate,
+          dailyData: data.dailyData,
+          realTokens: data.tokens,
+          isLoading: false
+        });
+      } else {
+        // Use mock data
+        const mockData = generateMockData(botId);
+        setSimulation(mockData);
+      }
+    } catch (err) {
+      console.warn('Failed to fetch real simulation data, falling back to mock:', err);
+      setDataSource('new-token');
+      const mockData = generateMockData(botId);
+      setSimulation(mockData);
+      setError('Using simulated data - real API unavailable');
+    }
+  };
+
+  const toggleDataSource = async (newUseBitquery: boolean) => {
+    setSimulation(prev => ({ ...prev, isLoading: true }));
+    setError(null);
+    
+    try {
+      console.log(`Switching to ${newUseBitquery ? 'BITQUERY' : 'LEGACY'} API for bot ${botId}`);
+      
+      const response = await fetch('/api/simulation', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          botType: botId,
+          tokenCount: 10,
+          useBitquery: newUseBitquery
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error(`API Error: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      
+      setSimulation({
+        profitPercentage: result.profitPercentage,
+        tradeCount: result.tradeCount,
+        successRate: result.successRate,
+        dailyData: result.dailyData,
+        realTokens: result.tokens,
+        isLoading: false
+      });
+      
+      setDataSource(newUseBitquery ? 'bitquery-api' : 'real-api');
+      
+    } catch (err) {
+      console.error('Error switching data source:', err);
+      setError('Could not switch data source.');
+      setSimulation(prev => ({ ...prev, isLoading: false }));
+    }
+  };
+
+  useEffect(() => {
+    refreshSimulation();
+    
+    if (autoRefresh) {
+      const interval = setInterval(refreshSimulation, 30000); // Refresh every 30 seconds
+      return () => clearInterval(interval);
+    }
+  }, [botId, dataSource, autoRefresh]);
+
+  return {
+    simulation,
+    error,
+    dataSource,
+    toggleDataSource,
+    refreshSimulation
   };
 }; 
