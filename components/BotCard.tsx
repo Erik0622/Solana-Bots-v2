@@ -59,7 +59,10 @@ const BotCard: FC<BotCardProps> = ({
   const [riskPercentage, setRiskPercentage] = useState(getBotRisk(id));
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [botStatus, setBotStatusState] = useState<'active' | 'paused'>(getBotStatus(id));
+  const [botStatus, setBotStatusState] = useState<'active' | 'paused'>(() => {
+    const status = getBotStatus(id);
+    return status?.isActive ? 'active' : 'paused';
+  });
   const [isFavorite, setIsFavorite] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
@@ -82,7 +85,8 @@ const BotCard: FC<BotCardProps> = ({
 
   // Stelle sicher, dass der Status beim ersten Laden gesetzt wird
   useEffect(() => {
-    setBotStatusState(getBotStatus(id));
+    const status = getBotStatus(id);
+    setBotStatusState(status?.isActive ? 'active' : 'paused');
   }, [id]);
 
   // Prüfe, ob der Bot favorisiert ist
@@ -143,17 +147,18 @@ const BotCard: FC<BotCardProps> = ({
       // Nur wenn der API-Status 'active' ist und der lokale Status 'paused',
       // ODER wenn der lokale Status noch nicht gesetzt wurde,
       // aktualisiere auf den API-Status
-      if ((apiStatus === 'active' && localStatus === 'paused') || !localStatus) {
+      const localBotStatus = getBotStatus(id);
+      if ((apiStatus === 'active' && botStatus === 'paused') || !localBotStatus) {
         console.log(`BotCard: Bot ${id} Status wird von API aktualisiert: ${botStatus} -> ${apiStatus}`);
         
         // Aktualisiere sowohl den lokalen Zustand als auch den globalen Speicher
         setBotStatusState(apiStatus);
-        setBotStatus(id, apiStatus);
+        setBotStatus(id, { isActive: apiStatus === 'active' });
         
         // Informiere die Elternkomponente
         onStatusChange(id, apiStatus);
       } else {
-        console.log(`BotCard: API-Status (${apiStatus}) wird ignoriert, da der lokale Status (${localStatus}) Priorität hat`);
+        console.log(`BotCard: API-Status (${apiStatus}) wird ignoriert, da der lokale Status (${botStatus}) Priorität hat`);
       }
     } catch (fetchError) {
       console.warn(`Fehler beim Abrufen des Bot-Status (${id}):`, fetchError);
@@ -311,7 +316,7 @@ const BotCard: FC<BotCardProps> = ({
         
         // Aktualisiere sowohl den lokalen Zustand als auch den globalen Speicher
         setBotStatusState(newStatus);
-        setBotStatus(id, newStatus);
+        setBotStatus(id, { isActive: newStatus === 'active' });
         
         // Markiere den Bot für echte Trades, wenn er aktiviert wurde
         markBotForTrading(id, newStatus === 'active');
