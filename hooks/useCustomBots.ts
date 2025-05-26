@@ -12,10 +12,10 @@ export interface CustomBot {
   trades: number;
   winRate: string;
   strategy: string;
-  riskLevel: 'low' | 'moderate' | 'high' | 'custom';
+  riskLevel: 'low' | 'moderate' | 'high';
   riskColor: string;
   baseRiskPerTrade: number;
-  riskManagement: string;
+  riskManagement?: string;
   status: 'active' | 'paused';
   profitToday: number;
   profitWeek: number;
@@ -27,85 +27,65 @@ export interface CustomBot {
   timeframe?: string;
 }
 
-export const useCustomBots = () => {
+export function useCustomBots() {
   const { publicKey } = useWallet();
   const [customBots, setCustomBots] = useState<CustomBot[]>([]);
 
-  // Lade Bots beim Start und wenn sich die Wallet ändert
   useEffect(() => {
-    if (publicKey) {
-      const storedBots = localStorage.getItem(`customBots_${publicKey.toString()}`);
-      if (storedBots) {
-        setCustomBots(JSON.parse(storedBots));
-      }
-    } else {
-      // Lade Guest Bots wenn keine Wallet verbunden
-      const guestBots = localStorage.getItem('customBots_guest');
-      if (guestBots) {
-        setCustomBots(JSON.parse(guestBots));
-      } else {
-        setCustomBots([]);
+    // Load custom bots from localStorage
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('customBots');
+      if (saved) {
+        try {
+          setCustomBots(JSON.parse(saved));
+        } catch (error) {
+          console.error('Error loading custom bots:', error);
+        }
       }
     }
-  }, [publicKey]);
+  }, []);
 
-  // Speichere einen neuen Bot
-  const saveBot = (bot: Omit<CustomBot, 'walletAddress' | 'createdAt'>) => {
+  const addCustomBot = (bot: Omit<CustomBot, 'id' | 'createdAt'>) => {
     const newBot: CustomBot = {
       ...bot,
+      id: `custom-${Date.now()}`,
       createdAt: new Date().toISOString(),
-      walletAddress: publicKey?.toString() || 'guest',
     };
-
+    
     const updatedBots = [...customBots, newBot];
     setCustomBots(updatedBots);
     
-    if (publicKey) {
-      localStorage.setItem(`customBots_${publicKey.toString()}`, JSON.stringify(updatedBots));
-    } else {
-      localStorage.setItem('customBots_guest', JSON.stringify(updatedBots));
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('customBots', JSON.stringify(updatedBots));
     }
     
     return newBot;
   };
 
-  // Aktualisiere einen bestehenden Bot
-  const updateBot = (botId: string, updates: Partial<CustomBot>) => {
+  const removeCustomBot = (id: string) => {
+    const updatedBots = customBots.filter(bot => bot.id !== id);
+    setCustomBots(updatedBots);
+    
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('customBots', JSON.stringify(updatedBots));
+    }
+  };
+
+  const updateCustomBot = (id: string, updates: Partial<CustomBot>) => {
     const updatedBots = customBots.map(bot => 
-      bot.id === botId ? { ...bot, ...updates } : bot
+      bot.id === id ? { ...bot, ...updates } : bot
     );
-    
     setCustomBots(updatedBots);
     
-    if (publicKey) {
-      localStorage.setItem(`customBots_${publicKey.toString()}`, JSON.stringify(updatedBots));
-    } else {
-      localStorage.setItem('customBots_guest', JSON.stringify(updatedBots));
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('customBots', JSON.stringify(updatedBots));
     }
-  };
-
-  // Lösche einen Bot
-  const deleteBot = (botId: string) => {
-    const updatedBots = customBots.filter(bot => bot.id !== botId);
-    setCustomBots(updatedBots);
-    
-    if (publicKey) {
-      localStorage.setItem(`customBots_${publicKey.toString()}`, JSON.stringify(updatedBots));
-    } else {
-      localStorage.setItem('customBots_guest', JSON.stringify(updatedBots));
-    }
-  };
-
-  // Hole alle Bots (auch ohne Wallet für Anzeige)
-  const getBots = () => {
-    return customBots;
   };
 
   return {
     customBots,
-    saveBot,
-    updateBot,
-    deleteBot,
-    getBots
+    addCustomBot,
+    removeCustomBot,
+    updateCustomBot,
   };
-}; 
+} 
