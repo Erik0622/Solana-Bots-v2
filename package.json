@@ -18,11 +18,13 @@
     "@solana/wallet-adapter-react": "^0.15.35",
     "@solana/wallet-adapter-react-ui": "^0.9.35",
     "@solana/wallet-adapter-wallets": "^0.19.25",
-    "@jupiter-ag/api": "^6.0.19",
+    "axios": "^1.6.2",
     "lucide-react": "^0.294.0",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.0.0",
-    "tailwind-merge": "^2.2.0"
+    "tailwind-merge": "^2.2.0",
+    "react-hot-toast": "^2.4.1",
+    "recharts": "^2.8.0"
   },
   "devDependencies": {
     "typescript": "^5.3.3",
